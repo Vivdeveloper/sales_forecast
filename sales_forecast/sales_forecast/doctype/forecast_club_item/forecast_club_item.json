@@ -1,0 +1,247 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-01-06 13:10:12.470067",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "item_code",
+  "item_name",
+  "item_manufacturing_remark",
+  "batch_size",
+  "bom",
+  "total_batch_qty",
+  "total_qty",
+  "column_break_pspq",
+  "week_1",
+  "w1_batch",
+  "w1_batch_qty",
+  "w1_wo",
+  "column_break_ohyy",
+  "week_2",
+  "w2_batch",
+  "w2_batch_qty",
+  "w2_wo",
+  "column_break_cbkq",
+  "week_3",
+  "w3_batch",
+  "w3_batch_qty",
+  "w3_wo",
+  "column_break_jgmb",
+  "week_4",
+  "w4_batch",
+  "w4_batch_qty",
+  "w4_wo"
+ ],
+ "fields": [
+  {
+   "columns": 3,
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item Code",
+   "options": "Item"
+  },
+  {
+   "columns": 1,
+   "fetch_from": "item_code.item_name",
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Item Name",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "batch_size",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Batch Size",
+   "reqd": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "bom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "BOM",
+   "options": "BOM",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_pspq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "columns": 1,
+   "fieldname": "week_1",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Week 1",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "w1_batch",
+   "fieldtype": "Float",
+   "label": "W1 Batch Size",
+   "non_negative": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "w1_wo",
+   "fieldtype": "Float",
+   "label": "W1 WO",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ohyy",
+   "fieldtype": "Column Break"
+  },
+  {
+   "columns": 1,
+   "fieldname": "week_2",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Week 2",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "w2_batch",
+   "fieldtype": "Float",
+   "label": "W2 Batch Size",
+   "non_negative": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "w2_wo",
+   "fieldtype": "Float",
+   "label": "W2 WO",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_cbkq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "columns": 1,
+   "fieldname": "week_3",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Week 3",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "w3_batch",
+   "fieldtype": "Float",
+   "label": "W3 Batch Size",
+   "non_negative": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "w3_wo",
+   "fieldtype": "Float",
+   "label": "W3 WO",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_jgmb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "columns": 1,
+   "fieldname": "week_4",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Week 4",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "w4_batch",
+   "fieldtype": "Float",
+   "label": "W4 Batch Size",
+   "non_negative": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "w4_wo",
+   "fieldtype": "Float",
+   "label": "W4 WO",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "total_batch_qty",
+   "fieldtype": "Float",
+   "label": "Total Batch Qty",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "total_qty",
+   "fieldtype": "Float",
+   "label": "Total Qty",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fetch_from": "item_code.custom_item_manufacturing_remark",
+   "fieldname": "item_manufacturing_remark",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Item Manufacturing Remark",
+   "options": "\nMake to Order\nPlanning",
+   "read_only": 1
+  },
+  {
+   "fieldname": "w1_batch_qty",
+   "fieldtype": "Float",
+   "label": "W1 Batch Qty",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "w2_batch_qty",
+   "fieldtype": "Float",
+   "label": "W2 Batch Qty",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "w3_batch_qty",
+   "fieldtype": "Float",
+   "label": "W3 Batch Qty",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "w4_batch_qty",
+   "fieldtype": "Float",
+   "label": "W4 Batch Qty",
+   "non_negative": 1,
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-01-08 22:28:49.520985",
+ "modified_by": "Administrator",
+ "module": "Sales Forecast",
+ "name": "Forecast Club Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

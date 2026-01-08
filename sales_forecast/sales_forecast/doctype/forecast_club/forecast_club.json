@@ -1,0 +1,219 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-01-06 13:15:23.746704",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_yix6",
+  "company",
+  "status",
+  "date",
+  "naming_series",
+  "column_break_wdxe",
+  "forecast_start_date",
+  "forecast_end_date",
+  "amended_from",
+  "section_break_zgmv",
+  "items",
+  "section_break_bfzn",
+  "get_fetch_material_request_item",
+  "ignore_available_stock",
+  "column_break_qsoc",
+  "set_warehouse",
+  "section_break_mubc",
+  "material_request_items"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_yix6",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Forecast Club",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "section_break_zgmv",
+   "fieldtype": "Section Break"
+  },
+  {
+   "allow_bulk_edit": 1,
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Forecast Club Item"
+  },
+  {
+   "fieldname": "column_break_wdxe",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "forecast_start_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Forecast Start Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "forecast_end_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Forecast End Date",
+   "reqd": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "naming_series",
+   "options": "FC"
+  },
+  {
+   "fieldname": "material_request_items",
+   "fieldtype": "Table",
+   "label": "Material Request Items",
+   "options": "Forecast Club Material Request Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_mubc",
+   "fieldtype": "Section Break"
+  },
+  {
+   "depends_on": "eval:doc.docstatus==0",
+   "fieldname": "get_fetch_material_request_item",
+   "fieldtype": "Button",
+   "label": "Get Fetch Material Request Item"
+  },
+  {
+   "fieldname": "set_warehouse",
+   "fieldtype": "Link",
+   "label": "Set Warehouse",
+   "options": "Warehouse",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Forecast Planned\nMaterial Requested",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_bfzn",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "ignore_available_stock",
+   "fieldtype": "Check",
+   "label": "Ignore Available Stock"
+  },
+  {
+   "fieldname": "column_break_qsoc",
+   "fieldtype": "Column Break"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [
+  {
+   "link_doctype": "Material Request",
+   "link_fieldname": "custom_forecast_club"
+  },
+  {
+   "link_doctype": "Work Order",
+   "link_fieldname": "custom_forecast_club"
+  }
+ ],
+ "modified": "2026-01-08 23:14:03.488211",
+ "modified_by": "Administrator",
+ "module": "Sales Forecast",
+ "name": "Forecast Club",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Manufacturing Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Manufacturing User",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [
+  {
+   "color": "Orange",
+   "title": "Forecast Planned"
+  },
+  {
+   "color": "Yellow",
+   "title": "Material Requested"
+  }
+ ]
+}

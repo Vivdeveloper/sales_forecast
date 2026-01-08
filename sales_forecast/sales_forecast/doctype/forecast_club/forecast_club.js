@@ -1,0 +1,506 @@
+// Copyright (c) 2026, Viv Choudhary and contributors
+// For license information, please see license.txt
+
+frappe.ui.form.on("Forecast Club", {
+	refresh(frm) {
+		// Add "Create Material Request" button
+		if (frm.doc.docstatus === 1
+			&& frm.doc.material_request_items
+			&& frm.doc.material_request_items.length > 0
+			&& frm.doc.status === "Forecast Planned") {
+
+			frm.add_custom_button(__('Create Material Request'), function() {
+				frm.call({
+					method: 'create_material_requests',
+					doc: frm.doc,
+					freeze: true,
+					freeze_message: __('Creating Material Request...'),
+					callback: function(r) {
+						if (!r.exc && r.message) {
+							frappe.show_alert({
+								message: __('Material Request created successfully'),
+								indicator: 'green'
+							});
+							frm.reload_doc();
+						}
+					}
+				});
+			});
+		}
+
+		// Add "Create Work Orders" button
+		if (frm.doc.docstatus === 1 && frm.doc.items && frm.doc.items.length > 0) {
+			frm.add_custom_button(__('Create Work Orders'), function() {
+				show_work_order_dialog(frm);
+			});
+		}
+	},
+
+	validate(frm) {
+		validate_week_and_batch_fields(frm);
+	},
+
+	get_fetch_material_request_item(frm) {
+		frm.call({
+			method: 'fetch_material_request_items',
+			doc: frm.doc,
+			freeze: true,
+			freeze_message: __('Fetching material request items...'),
+			callback: function(r) {
+				if (!r.exc && r.message) {
+					frm.refresh_field('material_request_items');
+
+					if (r.message.status === 'error') {
+						frappe.msgprint({
+							title: __('Error'),
+							indicator: 'red',
+							message: r.message.message
+						});
+					} else {
+						frm.save().then(() => {
+							// Show success message
+							frappe.show_alert({
+								message: __(r.message.message || 'Material Request Items fetched successfully'),
+								indicator: 'green'
+							});
+
+							// Show warning if any items don't have BOM
+							if (r.message.warning) {
+								frappe.msgprint({
+									title: __('Warning'),
+									indicator: 'orange',
+									message: r.message.warning
+								});
+							}
+						});
+					}
+				}
+			}
+		});
+	},
+
+	forecast_start_date(frm) {
+		fetch_sales_forecasts_if_dates_set(frm);
+	},
+
+	forecast_end_date(frm) {
+		fetch_sales_forecasts_if_dates_set(frm);
+	},
+
+	company(frm) {
+		fetch_sales_forecasts_if_dates_set(frm);
+	}
+});
+
+function validate_week_and_batch_fields(frm) {
+	const week_batch_mapping = [
+		{ week: 'week_1', batch: 'w1_batch', label: 'Week 1' },
+		{ week: 'week_2', batch: 'w2_batch', label: 'Week 2' },
+		{ week: 'week_3', batch: 'w3_batch', label: 'Week 3' },
+		{ week: 'week_4', batch: 'w4_batch', label: 'Week 4' }
+	];
+
+	let errors = [];
+
+	frm.doc.items.forEach((row, idx) => {
+		week_batch_mapping.forEach(mapping => {
+			const week_value = row[mapping.week] || 0;
+			const batch_value = row[mapping.batch] || 0;
+
+			// If week value is 0 or empty, batch must also be 0 or empty
+			if (week_value === 0 || !week_value) {
+				// Week is 0/empty, batch should be 0/empty - this is valid
+				// No error needed
+			} else {
+				// Week has a value greater than 0
+				// Batch must also be greater than 0
+				if (batch_value === 0 || !batch_value) {
+					errors.push(__('Row {0}: {1} has value {2}, but {3} Batch is 0 or empty. Batch is required when week value is greater than 0.',
+						[idx + 1, mapping.label, week_value, mapping.label]));
+				}
+			}
+		});
+	});
+
+	if (errors.length > 0) {
+		frappe.msgprint({
+			title: __('Validation Error'),
+			indicator: 'red',
+			message: errors.join('<br>')
+		});
+		frappe.validated = false;
+	}
+}
+
+function fetch_sales_forecasts_if_dates_set(frm) {
+	// Only fetch if all required fields are set
+	if (frm.doc.forecast_start_date && frm.doc.forecast_end_date && frm.doc.company) {
+		frm.call({
+			method: 'fetch_sales_forecasts',
+			doc: frm.doc,
+			freeze: true,
+			freeze_message: __('Fetching sales forecasts...'),
+			callback: function(r) {
+				if (!r.exc) {
+					frm.refresh_field('items');
+					frappe.show_alert({
+						message: __('Sales Forecasts fetched successfully'),
+						indicator: 'green'
+					});
+				}
+			}
+		});
+	}
+}
+
+frappe.ui.form.on("Forecast Club Item", {
+	item_code(frm, cdt, cdn) {
+		check_duplicate_item(frm, cdt, cdn);
+	},
+
+	batch_size(frm, cdt, cdn) {
+		calculate_totals(frm, cdt, cdn);
+	},
+
+	week_1(frm, cdt, cdn) {
+		validate_week_batch_relationship(frm, cdt, cdn, 'week_1', 'w1_batch', 'Week 1');
+	},
+
+	week_2(frm, cdt, cdn) {
+		validate_week_batch_relationship(frm, cdt, cdn, 'week_2', 'w2_batch', 'Week 2');
+	},
+
+	week_3(frm, cdt, cdn) {
+		validate_week_batch_relationship(frm, cdt, cdn, 'week_3', 'w3_batch', 'Week 3');
+	},
+
+	week_4(frm, cdt, cdn) {
+		validate_week_batch_relationship(frm, cdt, cdn, 'week_4', 'w4_batch', 'Week 4');
+	},
+
+	w1_batch(frm, cdt, cdn) {
+		validate_week_batch_relationship(frm, cdt, cdn, 'week_1', 'w1_batch', 'Week 1');
+		calculate_totals(frm, cdt, cdn);
+	},
+
+	w2_batch(frm, cdt, cdn) {
+		validate_week_batch_relationship(frm, cdt, cdn, 'week_2', 'w2_batch', 'Week 2');
+		calculate_totals(frm, cdt, cdn);
+	},
+
+	w3_batch(frm, cdt, cdn) {
+		validate_week_batch_relationship(frm, cdt, cdn, 'week_3', 'w3_batch', 'Week 3');
+		calculate_totals(frm, cdt, cdn);
+	},
+
+	w4_batch(frm, cdt, cdn) {
+		validate_week_batch_relationship(frm, cdt, cdn, 'week_4', 'w4_batch', 'Week 4');
+		calculate_totals(frm, cdt, cdn);
+	}
+});
+
+function validate_week_batch_relationship(frm, cdt, cdn, week_field, batch_field, week_label) {
+	let row = locals[cdt][cdn];
+	const week_value = row[week_field] || 0;
+	const batch_value = row[batch_field] || 0;
+
+	// If week value is greater than 0, batch must also be greater than 0
+	if (week_value > 0 && batch_value === 0) {
+		frappe.msgprint({
+			title: __('Validation Error'),
+			indicator: 'orange',
+			message: __('{0} has a value of {1}, but {2} Batch is 0 or empty. Please enter a batch value when week value is greater than 0.',
+				[week_label, week_value, week_label])
+		});
+	}
+}
+
+function check_duplicate_item(frm, cdt, cdn) {
+	let row = locals[cdt][cdn];
+
+	if (!row.item_code) {
+		return;
+	}
+
+	// Count occurrences of this item_code
+	let duplicate_found = false;
+	let first_row_idx = null;
+
+	frm.doc.items.forEach((item, idx) => {
+		if (item.item_code === row.item_code) {
+			if (first_row_idx === null) {
+				first_row_idx = idx + 1;
+			} else if (item.name === row.name) {
+				// This is the duplicate row
+				duplicate_found = true;
+				frappe.msgprint({
+					title: __('Duplicate Item'),
+					indicator: 'orange',
+					message: __('Item {0} already exists in Row #{1}. Please select a different item or remove the duplicate.',
+						[frappe.bold(row.item_code), first_row_idx])
+				});
+			}
+		}
+	});
+
+	// If duplicate found, clear the item_code
+	if (duplicate_found) {
+		frappe.model.set_value(cdt, cdn, 'item_code', '');
+	}
+}
+
+function calculate_totals(frm, cdt, cdn) {
+	let row = locals[cdt][cdn];
+	let batch_size = row.batch_size || 0;
+
+	// Calculate weekly batch quantities (batch_count * batch_size)
+	row.w1_batch_qty = (row.w1_batch || 0) * batch_size;
+	row.w2_batch_qty = (row.w2_batch || 0) * batch_size;
+	row.w3_batch_qty = (row.w3_batch || 0) * batch_size;
+	row.w4_batch_qty = (row.w4_batch || 0) * batch_size;
+
+	// Calculate total_batch_qty as sum of all weekly batches
+	row.total_batch_qty = (row.w1_batch || 0) + (row.w2_batch || 0) + (row.w3_batch || 0) + (row.w4_batch || 0);
+
+	// Calculate total_qty as total_batch_qty * batch_size
+	row.total_qty = row.total_batch_qty * batch_size;
+
+	frm.refresh_field('items');
+}
+
+function show_work_order_dialog(frm) {
+	// First dialog: Select week
+	let week_dialog = new frappe.ui.Dialog({
+		title: __('Select Week for Work Orders'),
+		fields: [
+			{
+				fieldname: 'week',
+				fieldtype: 'Select',
+				label: __('Week'),
+				options: [
+					'Week 1',
+					'Week 2',
+					'Week 3',
+					'Week 4'
+				],
+				reqd: 1,
+				default: 'Week 1'
+			}
+		],
+		primary_action_label: __('Next'),
+		primary_action(values) {
+			week_dialog.hide();
+			show_items_selection_dialog(frm, values.week);
+		}
+	});
+
+	week_dialog.show();
+}
+
+function show_items_selection_dialog(frm, selected_week) {
+	// Map week display name to field names
+	const week_map = {
+		'Week 1': { week_field: 'week_1', batch_field: 'w1_batch', batch_qty_field: 'w1_batch_qty', wo_field: 'w1_wo' },
+		'Week 2': { week_field: 'week_2', batch_field: 'w2_batch', batch_qty_field: 'w2_batch_qty', wo_field: 'w2_wo' },
+		'Week 3': { week_field: 'week_3', batch_field: 'w3_batch', batch_qty_field: 'w3_batch_qty', wo_field: 'w3_wo' },
+		'Week 4': { week_field: 'week_4', batch_field: 'w4_batch', batch_qty_field: 'w4_batch_qty', wo_field: 'w4_wo' }
+	};
+
+	const week_data = week_map[selected_week];
+
+	// Get existing Work Order count for each item
+	frappe.call({
+		method: 'sales_forecast.sales_forecast.doctype.forecast_club.forecast_club.get_work_order_summary',
+		args: {
+			forecast_club: frm.doc.name,
+			week: week_data.week_field
+		},
+		callback: function(r) {
+			if (!r.exc && r.message) {
+				let wo_summary = r.message;
+
+				// Filter items that have batch quantity for this week
+				let items_with_batch = frm.doc.items.filter(item => {
+					let batch_qty = item[week_data.batch_qty_field] || 0;
+					return batch_qty > 0 && item.item_code && item.bom;
+				});
+
+				if (items_with_batch.length === 0) {
+					frappe.msgprint(__('No items found with batch quantity for {0}.', [selected_week]));
+					return;
+				}
+
+				show_items_table(frm, selected_week, week_data, items_with_batch, wo_summary);
+			}
+		}
+	});
+}
+
+function show_items_table(frm, selected_week, week_data, items_with_batch, wo_summary) {
+
+	// Prepare items data for child table
+	let items_data = items_with_batch.map(item => {
+		let batch_count = item[week_data.batch_field] || 0;
+		let batch_size = item.batch_size || 0;
+		let wo_created = wo_summary[item.item_code] || 0;
+		let remaining_batches = batch_count - wo_created;
+
+		return {
+			item_code: item.item_code,
+			item_name: item.item_name || '',
+			batch_size: batch_size,
+			total_batches: batch_count,
+			wo_created: wo_created,
+			remaining_batches: remaining_batches,
+			batches_to_create: remaining_batches > 0 ? remaining_batches : 0,
+			forecast_club_item: item.name
+		};
+	});
+
+	let items_dialog = new frappe.ui.Dialog({
+		title: __('Create Work Orders for {0}', [selected_week]),
+		fields: [
+			{
+				fieldtype: 'Check',
+				fieldname: 'split_work_orders',
+				label: __('Split Work Orders (One WO per Batch)'),
+				default: 0,
+				description: __('If checked, creates multiple Work Orders (one per batch). If unchecked, creates single Work Order with total quantity.')
+			},
+			{
+				fieldtype: 'Table',
+				fieldname: 'items',
+				label: __('Items'),
+				cannot_add_rows: true,
+				cannot_delete_rows: true,
+				in_place_edit: true,
+				data: items_data,
+				fields: [
+					{
+						fieldtype: 'Data',
+						fieldname: 'item_code',
+						label: __('Item Code'),
+						in_list_view: 1,
+						read_only: 1,
+						columns: 2
+					},
+					{
+						fieldtype: 'Data',
+						fieldname: 'item_name',
+						label: __('Item Name'),
+						in_list_view: 1,
+						read_only: 1,
+						columns: 2
+					},
+					{
+						fieldtype: 'Float',
+						fieldname: 'batch_size',
+						label: __('Batch Size'),
+						in_list_view: 1,
+						read_only: 1,
+						columns: 1
+					},
+					{
+						fieldtype: 'Int',
+						fieldname: 'total_batches',
+						label: __('Total Batches'),
+						in_list_view: 1,
+						read_only: 1,
+						columns: 1
+					},
+					{
+						fieldtype: 'Int',
+						fieldname: 'wo_created',
+						label: __('WO Created'),
+						in_list_view: 1,
+						read_only: 1,
+						columns: 1
+					},
+					{
+						fieldtype: 'Int',
+						fieldname: 'remaining_batches',
+						label: __('Remaining'),
+						in_list_view: 1,
+						read_only: 1,
+						columns: 1
+					},
+					{
+						fieldtype: 'Int',
+						fieldname: 'batches_to_create',
+						label: __('Batches to Create'),
+						in_list_view: 1,
+						columns: 1
+					},
+					{
+						fieldtype: 'Data',
+						fieldname: 'forecast_club_item',
+						label: __('Forecast Club Item'),
+						hidden: 1
+					}
+				]
+			}
+		],
+		size: 'extra-large',
+		primary_action_label: __('Create Work Orders'),
+		primary_action(values) {
+			// Validate and collect items to create
+			let items_to_create = [];
+
+			values.items.forEach(row => {
+				let batches = parseInt(row.batches_to_create) || 0;
+				if (batches > 0) {
+					// Validate batches_to_create doesn't exceed remaining
+					if (batches > row.remaining_batches) {
+						frappe.msgprint({
+							title: __('Validation Error'),
+							indicator: 'red',
+							message: __('Item {0}: Batches to create ({1}) cannot exceed remaining batches ({2})',
+								[row.item_code, batches, row.remaining_batches])
+						});
+						frappe.validated = false;
+						return false;
+					}
+
+					items_to_create.push({
+						forecast_club_item: row.forecast_club_item,
+						item_code: row.item_code,
+						batch_size: row.batch_size,
+						batches: batches
+					});
+				}
+			});
+
+			if (items_to_create.length === 0) {
+				frappe.msgprint(__('Please set "Batches to Create" for at least one item'));
+				return;
+			}
+
+			items_dialog.hide();
+
+			// Call server method to create work orders
+			frappe.call({
+				method: 'sales_forecast.sales_forecast.doctype.forecast_club.forecast_club.create_work_orders_batch_wise',
+				args: {
+					forecast_club: frm.doc.name,
+					week: week_data.week_field,
+					items: items_to_create
+				},
+				freeze: true,
+				freeze_message: __('Creating Work Orders...'),
+				callback: function(r) {
+					if (!r.exc && r.message && r.message.length > 0) {
+						frappe.show_alert({
+							message: __('Created {0} Work Orders', [r.message.length]),
+							indicator: 'green'
+						});
+						frm.reload_doc();
+					} else if (r.message && r.message.length === 0) {
+						frappe.msgprint(__('No Work Orders created.'));
+					}
+				}
+			});
+		}
+	});
+
+	items_dialog.show();
+}
