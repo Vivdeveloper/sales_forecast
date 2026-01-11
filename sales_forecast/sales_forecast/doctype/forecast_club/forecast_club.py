@@ -138,6 +138,15 @@ class ForecastClub(Document):
 					"actual_qty"
 				) or 0
 
+			# Get actual_qty_2 from set_warehouse_2
+			actual_qty_2 = 0
+			if self.set_warehouse_2:
+				actual_qty_2 = frappe.db.get_value(
+					"Bin",
+					{"item_code": item_code, "warehouse": self.set_warehouse_2},
+					"actual_qty"
+				) or 0
+
 			# Get company_total_stock (sum of all warehouses in the company)
 			company_total_stock = 0
 			if self.company:
@@ -155,8 +164,12 @@ class ForecastClub(Document):
 				# If ignore_available_stock is checked, qty = bom_qty
 				qty_needed = bom_qty
 			else:
-				# Otherwise, qty = bom_qty - actual_qty
-				qty_needed = bom_qty - actual_qty
+				# Otherwise, qty = bom_qty - (actual_qty + actual_qty_2)
+				# Treat negative stock values as 0
+				actual_qty_positive = max(0, actual_qty)
+				actual_qty_2_positive = max(0, actual_qty_2)
+				total_available_stock = actual_qty_positive + actual_qty_2_positive
+				qty_needed = bom_qty - total_available_stock
 				# Ensure qty is not negative
 				if qty_needed < 0:
 					qty_needed = 0
@@ -168,6 +181,7 @@ class ForecastClub(Document):
 				"qty": qty_needed,
 				"uom": material_data["uom"],
 				"actual_qty": actual_qty,
+				"actual_qty_2": actual_qty_2,
 				"company_total_stock": company_total_stock
 			})
 
@@ -315,6 +329,9 @@ class ForecastClub(Document):
 		})
 
 		mr.insert()
+
+		# Add tag "From Forecast" to Material Request
+		frappe.get_doc("Material Request", mr.name).add_tag("From Forecast")
 
 		# Update status to Material Requested
 		self.db_set("status", "Material Requested")
@@ -635,19 +652,27 @@ def on_work_order_submit(doc, method):
 		# Find the matching item in Forecast Club
 		for item in fc_doc.items:
 			if item.name == doc.custom_forecast_club_item:
-				# Get current wo count and add 1 (counting batches, not quantity)
-				current_wo_count = getattr(item, wo_field, 0) or 0
-				new_wo_count = current_wo_count + 1
+				# Get total quantity from all Work Orders for this week
+				total_wo_qty = frappe.db.sql("""
+					SELECT SUM(qty) as total_qty
+					FROM `tabWork Order`
+					WHERE custom_forecast_club = %s
+					AND custom_forecast_club_item = %s
+					AND custom_weekly = %s
+					AND docstatus != 2
+				""", (doc.custom_forecast_club, doc.custom_forecast_club_item, week_field), as_dict=1)
 
-				# Update the wo field with batch count
+				new_wo_qty = total_wo_qty[0].total_qty if total_wo_qty else 0
+
+				# Update the wo field with total quantity
 				frappe.db.set_value(
 					"Forecast Club Item",
 					item.name,
 					wo_field,
-					new_wo_count
+					new_wo_qty or 0
 				)
 
-				frappe.msgprint(f"Updated Forecast Club {doc.custom_forecast_club}: {wo_field} = {new_wo_count}")
+				frappe.msgprint(f"Updated Forecast Club {doc.custom_forecast_club}: {wo_field} = {new_wo_qty}")
 				break
 
 	except Exception as e:
@@ -685,23 +710,27 @@ def on_work_order_cancel(doc, method):
 		# Find the matching item in Forecast Club
 		for item in fc_doc.items:
 			if item.name == doc.custom_forecast_club_item:
-				# Get current wo count and subtract 1 (counting batches, not quantity)
-				current_wo_count = getattr(item, wo_field, 0) or 0
-				new_wo_count = current_wo_count - 1
+				# Recalculate total quantity from all remaining Work Orders for this week
+				total_wo_qty = frappe.db.sql("""
+					SELECT SUM(qty) as total_qty
+					FROM `tabWork Order`
+					WHERE custom_forecast_club = %s
+					AND custom_forecast_club_item = %s
+					AND custom_weekly = %s
+					AND docstatus != 2
+				""", (doc.custom_forecast_club, doc.custom_forecast_club_item, week_field), as_dict=1)
 
-				# Ensure the count doesn't go below 0
-				if new_wo_count < 0:
-					new_wo_count = 0
+				new_wo_qty = total_wo_qty[0].total_qty if total_wo_qty else 0
 
-				# Update the wo field with batch count
+				# Update the wo field with total quantity
 				frappe.db.set_value(
 					"Forecast Club Item",
 					item.name,
 					wo_field,
-					new_wo_count
+					new_wo_qty or 0
 				)
 
-				frappe.msgprint(f"Updated Forecast Club {doc.custom_forecast_club}: {wo_field} = {new_wo_count}")
+				frappe.msgprint(f"Updated Forecast Club {doc.custom_forecast_club}: {wo_field} = {new_wo_qty}")
 				break
 
 	except Exception as e:

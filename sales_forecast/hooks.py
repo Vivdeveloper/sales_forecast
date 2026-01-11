@@ -145,6 +145,9 @@ doc_events = {
 	"Work Order": {
 		"on_submit": "sales_forecast.sales_forecast.doctype.forecast_club.forecast_club.on_work_order_submit",
 		"on_cancel": "sales_forecast.sales_forecast.doctype.forecast_club.forecast_club.on_work_order_cancel"
+	},
+	"Sales Person": {
+		"validate": "sales_forecast.overrides.sales_person.validate"
 	}
 }
 

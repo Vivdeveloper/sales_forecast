@@ -28,9 +28,9 @@ frappe.ui.form.on("Forecast Club", {
 			});
 		}
 
-		// Add "Create Work Orders" button
+		// Add "Split Work Orders" button
 		if (frm.doc.docstatus === 1 && frm.doc.items && frm.doc.items.length > 0) {
-			frm.add_custom_button(__('Create Work Orders'), function() {
+			frm.add_custom_button(__('Split Work Orders'), function() {
 				show_work_order_dialog(frm);
 			});
 		}
@@ -38,6 +38,20 @@ frappe.ui.form.on("Forecast Club", {
 
 	validate(frm) {
 		validate_week_and_batch_fields(frm);
+	},
+
+	set_warehouse(frm) {
+		// Auto-refresh stock when set_warehouse is changed
+		if (frm.doc.material_request_items && frm.doc.material_request_items.length > 0) {
+			refresh_stock_quantities(frm);
+		}
+	},
+
+	set_warehouse_2(frm) {
+		// Auto-refresh stock when set_warehouse_2 is changed
+		if (frm.doc.material_request_items && frm.doc.material_request_items.length > 0) {
+			refresh_stock_quantities(frm);
+		}
 	},
 
 	get_fetch_material_request_item(frm) {
@@ -361,13 +375,6 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 		title: __('Create Work Orders for {0}', [selected_week]),
 		fields: [
 			{
-				fieldtype: 'Check',
-				fieldname: 'split_work_orders',
-				label: __('Split Work Orders (One WO per Batch)'),
-				default: 0,
-				description: __('If checked, creates multiple Work Orders (one per batch). If unchecked, creates single Work Order with total quantity.')
-			},
-			{
 				fieldtype: 'Table',
 				fieldname: 'items',
 				label: __('Items'),
@@ -375,6 +382,9 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 				cannot_delete_rows: true,
 				in_place_edit: true,
 				data: items_data,
+				get_data: () => {
+					return items_data;
+				},
 				fields: [
 					{
 						fieldtype: 'Data',
@@ -443,10 +453,24 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 		size: 'extra-large',
 		primary_action_label: __('Create Work Orders'),
 		primary_action(values) {
-			// Validate and collect items to create
+			// Get selected rows from the table
+			let table_field = items_dialog.fields_dict.items;
+			let selected_rows = table_field.grid.get_selected_children();
+
+			// Check if any rows are selected
+			if (selected_rows.length === 0) {
+				frappe.msgprint({
+					title: __('No Items Selected'),
+					indicator: 'orange',
+					message: __('Please select at least one item by checking the checkbox on the left side of the row')
+				});
+				return;
+			}
+
+			// Validate and collect items to create (only selected rows)
 			let items_to_create = [];
 
-			values.items.forEach(row => {
+			selected_rows.forEach(row => {
 				let batches = parseInt(row.batches_to_create) || 0;
 				if (batches > 0) {
 					// Validate batches_to_create doesn't exceed remaining
@@ -471,7 +495,11 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 			});
 
 			if (items_to_create.length === 0) {
-				frappe.msgprint(__('Please set "Batches to Create" for at least one item'));
+				frappe.msgprint({
+					title: __('No Batches to Create'),
+					indicator: 'orange',
+					message: __('Please set "Batches to Create" for the selected items')
+				});
 				return;
 			}
 
@@ -503,4 +531,23 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 	});
 
 	items_dialog.show();
+}
+
+function refresh_stock_quantities(frm) {
+	// Re-fetch material request items to update stock quantities
+	frm.call({
+		method: 'fetch_material_request_items',
+		doc: frm.doc,
+		freeze: true,
+		freeze_message: __('Updating stock quantities...'),
+		callback: function(r) {
+			if (!r.exc && r.message) {
+				frm.refresh_field('material_request_items');
+				frappe.show_alert({
+					message: __('Stock quantities updated'),
+					indicator: 'green'
+				});
+			}
+		}
+	});
 }

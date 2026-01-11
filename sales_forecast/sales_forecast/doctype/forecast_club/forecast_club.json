@@ -22,6 +22,7 @@
   "ignore_available_stock",
   "column_break_qsoc",
   "set_warehouse",
+  "set_warehouse_2",
   "section_break_mubc",
   "material_request_items"
  ],
@@ -136,6 +137,13 @@
   {
    "fieldname": "column_break_qsoc",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "set_warehouse_2",
+   "fieldtype": "Link",
+   "label": "Set Warehouse 2",
+   "options": "Warehouse",
+   "reqd": 1
   }
  ],
  "grid_page_length": 50,
@@ -151,7 +159,7 @@
    "link_fieldname": "custom_forecast_club"
   }
  ],
- "modified": "2026-01-08 23:14:03.488211",
+ "modified": "2026-01-11 21:04:40.118936",
  "modified_by": "Administrator",
  "module": "Sales Forecast",
  "name": "Forecast Club",
