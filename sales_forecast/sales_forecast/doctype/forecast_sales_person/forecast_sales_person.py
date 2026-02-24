@@ -28,7 +28,7 @@ class ForecastSalesPerson(Document):
 
 
 	def validate_items(self):
-		"""Validate forecast_sales_person items for duplicates and blank entries"""
+		"""Validate forecast_sales_person items for duplicates (no filter or required check on item_code)"""
 		if not self.items:
 			frappe.throw(_("Please add at least one item in the ForecastSalesPerson Items table"))
 
@@ -36,9 +36,9 @@ class ForecastSalesPerson(Document):
 		seen_items = {}
 
 		for idx, item in enumerate(self.items, start=1):
-			# Check if item_code is blank
+			# Skip duplicate checks when item_code is blank (item_code has no validation)
 			if not item.item_code:
-				frappe.throw(_("Row #{0}: Item Code cannot be blank").format(idx))
+				continue
 
 			# Check for duplicate item_code + customer combination
 			if item.customer:

@@ -202,24 +202,6 @@ function setup_item_customer_filters(frm) {
 				console.log('Allowed Items:', allowed_items);
 				console.log('Allowed Customers:', allowed_customers);
 
-				// Set filter for item_code in child table
-				frm.set_query('item_code', 'items', function() {
-					if (allowed_items.length > 0) {
-						return {
-							filters: [
-								['Item', 'name', 'in', allowed_items]
-							]
-						};
-					} else {
-						// If no items configured, show none
-						return {
-							filters: [
-								['Item', 'name', '=', '___no_item___']
-							]
-						};
-					}
-				});
-
 				// Set filter for customer in child table
 				frm.set_query('customer', 'items', function() {
 					if (allowed_customers.length > 0) {

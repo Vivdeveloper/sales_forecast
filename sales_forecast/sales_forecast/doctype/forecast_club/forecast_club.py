@@ -3,6 +3,7 @@
 
 import frappe
 from frappe.model.document import Document
+from frappe.utils import flt
 
 
 class ForecastClub(Document):
@@ -15,7 +16,7 @@ class ForecastClub(Document):
 		self.db_set("status", "Forecast Planned")
 
 	def before_save(self):
-		"""Calculate totals for each item"""
+		"""Calculate totals for each item and set custom_company_stock, custom_item_packaging_material"""
 		for item in self.items:
 			batch_size = item.batch_size or 0
 
@@ -35,6 +36,97 @@ class ForecastClub(Document):
 
 			# Calculate total_qty as total_batch_qty * batch_size
 			item.total_qty = item.total_batch_qty * batch_size
+
+			# Set custom_company_stock: total stock for this item across all companies
+			if item.item_code and hasattr(item, "custom_company_stock"):
+				item.custom_company_stock = self._get_item_stock_in_all_companies(item.item_code)
+
+			# Set custom_item_packaging_material / custom__item_packaging_material: packaging materials with stock in company (item - stock)
+			packaging_value = self._get_item_packaging_materials(item.item_code, company=self.company) if item.item_code else ""
+			if item.item_code:
+				if hasattr(item, "custom_item_packaging_material"):
+					item.custom_item_packaging_material = packaging_value
+				if hasattr(item, "custom__item_packaging_material"):
+					item.custom__item_packaging_material = packaging_value
+
+	def _get_item_stock_in_all_companies(self, item_code):
+		"""Return total stock for item across all companies (sum of actual_qty in all warehouses)."""
+		result = frappe.db.sql("""
+			SELECT COALESCE(SUM(b.actual_qty), 0)
+			FROM `tabBin` b
+			INNER JOIN `tabWarehouse` w ON b.warehouse = w.name
+			WHERE b.item_code = %s
+		""", (item_code,))
+		return flt(result[0][0]) if result else 0
+
+	def _get_item_stock_in_company(self, item_code, company):
+		"""Return total stock for item in the given company (sum of actual_qty in company warehouses)."""
+		if not company:
+			return 0
+		result = frappe.db.sql("""
+			SELECT COALESCE(SUM(b.actual_qty), 0)
+			FROM `tabBin` b
+			INNER JOIN `tabWarehouse` w ON b.warehouse = w.name
+			WHERE b.item_code = %s AND w.company = %s
+		""", (item_code, company))
+		return flt(result[0][0]) if result else 0
+
+	def _get_item_packaging_materials(self, item_code, company=None):
+		"""Return string: for each packaging material from Item's 'Packing Material Details',
+		show 'item - stock in company'. Format: 'ITEM-A - 10, ITEM-B - 20'.
+		"""
+		child_doctype, item_field = self._get_packing_material_details_config()
+		if not child_doctype or not item_field or not frappe.db.table_exists(child_doctype):
+			return ""
+		try:
+			rows = frappe.get_all(
+				child_doctype,
+				filters={"parent": item_code, "parenttype": "Item"},
+				fields=[item_field],
+				pluck=item_field,
+			)
+			items_list = [x for x in rows if x]
+			if not items_list:
+				return ""
+			if company:
+				parts = []
+				for pkg_item in items_list:
+					stock = self._get_item_stock_in_company(pkg_item, company)
+					parts.append(f"{pkg_item} - {stock}")
+				return ", ".join(parts)
+			return ", ".join(items_list)
+		except Exception:
+			return ""
+
+	def _get_packing_material_details_config(self):
+		"""Resolve child doctype and 'item' field for Item's 'Packing Material Details' table."""
+		meta = frappe.get_meta("Item")
+		for df in meta.get_table_fields():
+			if not df.label or "Packing Material Details" not in df.label:
+				continue
+			child_doctype = df.options
+			if not child_doctype or not frappe.db.table_exists(child_doctype):
+				continue
+			child_meta = frappe.get_meta(child_doctype)
+			# Prefer field "item", else "item_code"
+			for f in child_meta.fields:
+				if f.fieldname in ("item", "item_code") and f.fieldtype == "Link" and f.options == "Item":
+					return (child_doctype, f.fieldname)
+		return (None, None)
+
+	@staticmethod
+	@frappe.whitelist()
+	def get_item_stock_and_packaging(item_code, company=None):
+		"""Return custom_company_stock and packaging list (item - stock in company) for an item (for client-side use)."""
+		if not item_code:
+			return {"custom_company_stock": 0, "custom_item_packaging_material": ""}
+		doc = frappe.new_doc("Forecast Club")
+		stock = doc._get_item_stock_in_all_companies(item_code)
+		packaging = doc._get_item_packaging_materials(item_code, company=company)
+		return {
+			"custom_company_stock": stock,
+			"custom_item_packaging_material": packaging,
+		}
 
 	def check_duplicate_items(self):
 		"""Check for duplicate items in the items table"""

@@ -107,43 +107,8 @@ frappe.ui.form.on("Forecast Club", {
 });
 
 function validate_week_and_batch_fields(frm) {
-	const week_batch_mapping = [
-		{ week: 'week_1', batch: 'w1_batch', label: 'Week 1' },
-		{ week: 'week_2', batch: 'w2_batch', label: 'Week 2' },
-		{ week: 'week_3', batch: 'w3_batch', label: 'Week 3' },
-		{ week: 'week_4', batch: 'w4_batch', label: 'Week 4' }
-	];
-
-	let errors = [];
-
-	frm.doc.items.forEach((row, idx) => {
-		week_batch_mapping.forEach(mapping => {
-			const week_value = row[mapping.week] || 0;
-			const batch_value = row[mapping.batch] || 0;
-
-			// If week value is 0 or empty, batch must also be 0 or empty
-			if (week_value === 0 || !week_value) {
-				// Week is 0/empty, batch should be 0/empty - this is valid
-				// No error needed
-			} else {
-				// Week has a value greater than 0
-				// Batch must also be greater than 0
-				if (batch_value === 0 || !batch_value) {
-					errors.push(__('Row {0}: {1} has value {2}, but {3} Batch is 0 or empty. Batch is required when week value is greater than 0.',
-						[idx + 1, mapping.label, week_value, mapping.label]));
-				}
-			}
-		});
-	});
-
-	if (errors.length > 0) {
-		frappe.msgprint({
-			title: __('Validation Error'),
-			indicator: 'red',
-			message: errors.join('<br>')
-		});
-		frappe.validated = false;
-	}
+	// Allow save even when w1_batch, w2_batch, w3_batch, w4_batch are 0.
+	// No validation that blocks save for zero batch values.
 }
 
 function fetch_sales_forecasts_if_dates_set(frm) {
@@ -170,6 +135,7 @@ function fetch_sales_forecasts_if_dates_set(frm) {
 frappe.ui.form.on("Forecast Club Item", {
 	item_code(frm, cdt, cdn) {
 		check_duplicate_item(frm, cdt, cdn);
+		fetch_item_stock_and_packaging(frm, cdt, cdn);
 	},
 
 	batch_size(frm, cdt, cdn) {
@@ -227,6 +193,25 @@ function validate_week_batch_relationship(frm, cdt, cdn, week_field, batch_field
 				[week_label, week_value, week_label])
 		});
 	}
+}
+
+function fetch_item_stock_and_packaging(frm, cdt, cdn) {
+	let row = locals[cdt][cdn];
+	if (!row.item_code) return;
+
+	frappe.call({
+		method: 'sales_forecast.sales_forecast.doctype.forecast_club.forecast_club.get_item_stock_and_packaging',
+		args: { item_code: row.item_code, company: frm.doc.company },
+		callback: function(r) {
+			if (r && r.message) {
+				frappe.model.set_value(cdt, cdn, 'custom_company_stock', r.message.custom_company_stock);
+				if (r.message.custom_item_packaging_material !== undefined) {
+					frappe.model.set_value(cdt, cdn, 'custom_item_packaging_material', r.message.custom_item_packaging_material);
+					frappe.model.set_value(cdt, cdn, 'custom__item_packaging_material', r.message.custom_item_packaging_material);
+				}
+			}
+		}
+	});
 }
 
 function check_duplicate_item(frm, cdt, cdn) {
