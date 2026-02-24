@@ -185,14 +185,14 @@ function validate_week_batch_relationship(frm, cdt, cdn, week_field, batch_field
 	const batch_value = row[batch_field] || 0;
 
 	// If week value is greater than 0, batch must also be greater than 0
-	if (week_value > 0 && batch_value === 0) {
-		frappe.msgprint({
-			title: __('Validation Error'),
-			indicator: 'orange',
-			message: __('{0} has a value of {1}, but {2} Batch is 0 or empty. Please enter a batch value when week value is greater than 0.',
-				[week_label, week_value, week_label])
-		});
-	}
+	// if (week_value > 0 && batch_value === 0) {
+	// 	frappe.msgprint({
+	// 		title: __('Validation Error'),
+	// 		indicator: 'orange',
+	// 		message: __('{0} has a value of {1}, but {2} Batch is 0 or empty. Please enter a batch value when week value is greater than 0.',
+	// 			[week_label, week_value, week_label])
+	// 	});
+	// }
 }
 
 function fetch_item_stock_and_packaging(frm, cdt, cdn) {
