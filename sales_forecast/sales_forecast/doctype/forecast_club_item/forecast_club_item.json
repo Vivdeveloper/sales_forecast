@@ -13,6 +13,8 @@
   "bom",
   "total_batch_qty",
   "total_qty",
+  "custom_company_stock",
+  "custom__item_packaging_material",
   "column_break_pspq",
   "week_1",
   "w1_batch",
@@ -188,6 +190,18 @@
    "fieldname": "total_qty",
    "fieldtype": "Float",
    "label": "Total Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "custom_company_stock",
+   "fieldtype": "Data",
+   "label": "FG Company Stock",
+   "read_only": 1
+  },
+  {
+   "fieldname": "custom__item_packaging_material",
+   "fieldtype": "Small Text",
+   "label": "Packing Material Stock",
    "read_only": 1
   },
   {
