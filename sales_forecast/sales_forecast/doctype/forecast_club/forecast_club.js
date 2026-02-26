@@ -1,8 +1,101 @@
 // Copyright (c) 2026, Viv Choudhary and contributors
 // For license information, please see license.txt
 
+// Wrap frappe.format so Packing Material Stock shows numbers in bold (item - stock)
+(function () {
+	const _format = frappe.format;
+	frappe.format = function (value, df, options, doc) {
+		let result = _format.apply(this, arguments);
+		if (
+			doc &&
+			doc.doctype === "Forecast Club Item" &&
+			df &&
+			df.fieldname === "custom__item_packaging_material" &&
+			typeof result === "string" &&
+			result
+		) {
+			result = result.replace(/\s*-\s*(\d+(?:\.\d+)?)(?=\s*,|\s*$)/g, " - <strong>$1</strong>");
+		}
+		return result;
+	};
+})();
+
 frappe.ui.form.on("Forecast Club", {
 	refresh(frm) {
+		// Ensure grid docfield formatter is set (backup for format wrap above)
+		const packaging_formatter = function (value) {
+			if (value == null || value === "") return value;
+			return value.replace(/\s*-\s*(\d+(?:\.\d+)?)(?=\s*,|\s*$)/g, " - <strong>$1</strong>");
+		};
+		const df_orig = frappe.meta.docfield_map["Forecast Club Item"] && frappe.meta.docfield_map["Forecast Club Item"]["custom__item_packaging_material"];
+		if (df_orig) df_orig.formatter = packaging_formatter;
+		const grid = frm.fields_dict.items && frm.fields_dict.items.grid;
+		if (grid && grid.docfields) {
+			grid.docfields.forEach((df) => {
+				if (df.fieldname === "custom__item_packaging_material") df.formatter = packaging_formatter;
+			});
+			frm.refresh_field("items");
+		}
+
+		// BOM: show only BOMs where BOM.item = row's item_code (production item)
+		// Store current row when BOM field is focused so get_query can read item_code (link passes parent doc)
+		let _bom_row_item_code = null;
+		const bom_get_query = function (doc, cdt, cdn) {
+			let item_code = _bom_row_item_code;
+			if (!item_code && doc && doc.doctype === "Forecast Club Item" && doc.item_code) {
+				item_code = doc.item_code;
+			}
+			if (!item_code && cdt && cdn) {
+				try {
+					const row = frappe.model.get_doc(cdt, cdn);
+					item_code = row ? row.item_code : null;
+				} catch (e) {
+					item_code = null;
+				}
+			}
+			if (!item_code && doc && doc.items && cdn) {
+				const row = doc.items.find((r) => r.name === cdn);
+				item_code = row ? row.item_code : null;
+			}
+			if (!item_code) {
+				return { filters: [["name", "=", "__never__"]] };
+			}
+			// 3-element filters: Frappe adds doctype when building query
+			return {
+				filters: [
+					["item", "=", item_code],
+					["docstatus", "=", 1]
+				]
+			};
+		};
+		frm.set_query("bom", "items", bom_get_query);
+		// Apply BOM query and focus handler so we know which row's item_code to use
+		function apply_bom_query_to_rows() {
+			if (!grid || !grid.grid_rows) return;
+			grid.grid_rows.forEach(function (row) {
+				const field = row.on_grid_fields_dict && row.on_grid_fields_dict["bom"];
+				if (field) {
+					field.get_query = bom_get_query;
+					// On focus, store this row's item_code for get_query (link passes parent doc, not row)
+					if (field.$input && !field.$input.data("bom-focus-bound")) {
+						field.$input.on("focus", function () {
+							_bom_row_item_code = row.doc ? row.doc.item_code : null;
+						});
+						field.$input.data("bom-focus-bound", true);
+					}
+				}
+			});
+		}
+		apply_bom_query_to_rows();
+		// Re-apply after grid refresh (e.g. new row added)
+		if (grid && grid.refresh) {
+			const _refresh = grid.refresh.bind(grid);
+			grid.refresh = function () {
+				_refresh();
+				setTimeout(apply_bom_query_to_rows, 0);
+			};
+		}
+
 		// Add "Create Material Request" button
 		if (frm.doc.docstatus === 1
 			&& frm.doc.material_request_items
@@ -136,6 +229,8 @@ frappe.ui.form.on("Forecast Club Item", {
 	item_code(frm, cdt, cdn) {
 		check_duplicate_item(frm, cdt, cdn);
 		fetch_item_stock_and_packaging(frm, cdt, cdn);
+		// Clear BOM when item changes so user picks a BOM for the new item
+		frappe.model.set_value(cdt, cdn, "bom", "");
 	},
 
 	batch_size(frm, cdt, cdn) {

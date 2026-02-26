@@ -163,6 +163,16 @@ class ForecastClub(Document):
 			return
 
 		for idx, item in enumerate(self.items, start=1):
+			# BOM must be connected to this row's item_code (BOM.item = item_code)
+			if item.item_code and item.bom:
+				bom_item = frappe.db.get_value("BOM", item.bom, "item")
+				if bom_item != item.item_code:
+					frappe.throw(
+						_("Row #{0}: BOM {1} is not for item {2}. Please select a BOM where Item = {2}.").format(
+							idx, item.bom, item.item_code
+						)
+					)
+
 			# Calculate total_batch_qty
 			total_batch = (item.w1_batch or 0) + (item.w2_batch or 0) + (item.w3_batch or 0) + (item.w4_batch or 0)
 
@@ -500,6 +510,12 @@ class ForecastClub(Document):
 			frappe.msgprint("No Work Orders created. Either they already exist or no weekly batches are set.")
 
 		return work_orders_created
+
+
+@frappe.whitelist()
+def get_item_stock_and_packaging(item_code, company=None):
+	"""Whitelisted wrapper for client calls. Returns custom_company_stock and packaging list for an item."""
+	return ForecastClub.get_item_stock_and_packaging(item_code, company=company)
 
 
 @frappe.whitelist()
