@@ -154,6 +154,7 @@ frappe.ui.form.on("Forecast Club", {
 			freeze: true,
 			freeze_message: __('Fetching material request items...'),
 			callback: function(r) {
+				console.log(r);
 				if (!r.exc && r.message) {
 					frm.refresh_field('material_request_items');
 
@@ -163,24 +164,25 @@ frappe.ui.form.on("Forecast Club", {
 							indicator: 'red',
 							message: r.message.message
 						});
-					} else {
-						frm.save().then(() => {
-							// Show success message
-							frappe.show_alert({
-								message: __(r.message.message || 'Material Request Items fetched successfully'),
-								indicator: 'green'
-							});
+					} 
+					// else {
+					// 	frm.save().then(() => {
+					// 		// Show success message
+					// 		frappe.show_alert({
+					// 			message: __(r.message.message || 'Material Request Items fetched successfully'),
+					// 			indicator: 'green'
+					// 		});
 
-							// Show warning if any items don't have BOM
-							if (r.message.warning) {
-								frappe.msgprint({
-									title: __('Warning'),
-									indicator: 'orange',
-									message: r.message.warning
-								});
-							}
-						});
-					}
+					// 		// Show warning if any items don't have BOM
+					// 		if (r.message.warning) {
+					// 			frappe.msgprint({
+					// 				title: __('Warning'),
+					// 				indicator: 'orange',
+					// 				message: r.message.warning
+					// 			});
+					// 		}
+					// 	});
+					// }
 				}
 			}
 		});
@@ -233,16 +235,13 @@ frappe.ui.form.on("Forecast Club Item", {
 		frappe.model.set_value(cdt, cdn, "bom", "");
 	},
 
-	batch_size(frm, cdt, cdn) {
-		calculate_totals(frm, cdt, cdn);
-	},
-
 	week_1(frm, cdt, cdn) {
 		validate_week_batch_relationship(frm, cdt, cdn, 'week_1', 'w1_batch', 'Week 1');
 	},
 
 	week_2(frm, cdt, cdn) {
 		validate_week_batch_relationship(frm, cdt, cdn, 'week_2', 'w2_batch', 'Week 2');
+
 	},
 
 	week_3(frm, cdt, cdn) {
@@ -254,23 +253,44 @@ frappe.ui.form.on("Forecast Club Item", {
 	},
 
 	w1_batch(frm, cdt, cdn) {
+		let row = locals[cdt][cdn];
 		validate_week_batch_relationship(frm, cdt, cdn, 'week_1', 'w1_batch', 'Week 1');
 		calculate_totals(frm, cdt, cdn);
+
+		let batch_capacity_1 = row.batch_capacity_1 || 0;
+		let w1_batch = row.w1_batch || 0;
+		frappe.model.set_value(cdt,cdn,"w1_batch_qty",parseInt(batch_capacity_1 || 0) * parseInt(w1_batch || 0));
+
 	},
 
 	w2_batch(frm, cdt, cdn) {
+		let row = locals[cdt][cdn];
 		validate_week_batch_relationship(frm, cdt, cdn, 'week_2', 'w2_batch', 'Week 2');
 		calculate_totals(frm, cdt, cdn);
+
+		let batch_capacity_2 = row.batch_capacity_2 || 0;
+		let w2_batch = row.w2_batch || 0;
+		frappe.model.set_value(cdt,cdn,"w2_batch_qty",parseInt(batch_capacity_2 || 0) * parseInt(w2_batch || 0));
 	},
 
 	w3_batch(frm, cdt, cdn) {
+		let row = locals[cdt][cdn];
 		validate_week_batch_relationship(frm, cdt, cdn, 'week_3', 'w3_batch', 'Week 3');
 		calculate_totals(frm, cdt, cdn);
+
+		let batch_capacity_3 = row.batch_capacity_3 || 0;
+		let w3_batch = row.w3_batch || 0;
+		frappe.model.set_value(cdt,cdn,"w3_batch_qty",parseInt(batch_capacity_3 || 0) * parseInt(w3_batch || 0));
 	},
 
 	w4_batch(frm, cdt, cdn) {
+		let row = locals[cdt][cdn];
 		validate_week_batch_relationship(frm, cdt, cdn, 'week_4', 'w4_batch', 'Week 4');
 		calculate_totals(frm, cdt, cdn);
+
+		let batch_capacity_4 = row.batch_capacity_4 || 0;
+		let w4_batch = row.w4_batch || 0;
+		frappe.model.set_value(cdt,cdn,"w4_batch_qty",parseInt(batch_capacity_4 || 0) * parseInt(w4_batch || 0));
 	}
 });
 
@@ -345,19 +365,12 @@ function check_duplicate_item(frm, cdt, cdn) {
 
 function calculate_totals(frm, cdt, cdn) {
 	let row = locals[cdt][cdn];
-	let batch_size = row.batch_size || 0;
-
-	// Calculate weekly batch quantities (batch_count * batch_size)
-	row.w1_batch_qty = (row.w1_batch || 0) * batch_size;
-	row.w2_batch_qty = (row.w2_batch || 0) * batch_size;
-	row.w3_batch_qty = (row.w3_batch || 0) * batch_size;
-	row.w4_batch_qty = (row.w4_batch || 0) * batch_size;
 
 	// Calculate total_batch_qty as sum of all weekly batches
 	row.total_batch_qty = (row.w1_batch || 0) + (row.w2_batch || 0) + (row.w3_batch || 0) + (row.w4_batch || 0);
 
 	// Calculate total_qty as total_batch_qty * batch_size
-	row.total_qty = row.total_batch_qty * batch_size;
+	row.total_qty = parseInt(row.w1_batch_qty) + parseInt(row.w2_batch_qty) + parseInt(row.w3_batch_qty) + parseInt(row.w4_batch_qty)
 
 	frm.refresh_field('items');
 }
@@ -435,14 +448,14 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 	// Prepare items data for child table
 	let items_data = items_with_batch.map(item => {
 		let batch_count = item[week_data.batch_field] || 0;
-		let batch_size = item.batch_size || 0;
+		// let batch_size = item.batch_size || 0;
 		let wo_created = wo_summary[item.item_code] || 0;
 		let remaining_batches = batch_count - wo_created;
 
 		return {
 			item_code: item.item_code,
 			item_name: item.item_name || '',
-			batch_size: batch_size,
+			// batch_size: batch_size,
 			total_batches: batch_count,
 			wo_created: wo_created,
 			remaining_batches: remaining_batches,
@@ -482,14 +495,14 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 						read_only: 1,
 						columns: 2
 					},
-					{
-						fieldtype: 'Float',
-						fieldname: 'batch_size',
-						label: __('Batch Size'),
-						in_list_view: 1,
-						read_only: 1,
-						columns: 1
-					},
+					// {
+					// 	fieldtype: 'Float',
+					// 	fieldname: 'batch_size',
+					// 	label: __('Batch Size'),
+					// 	in_list_view: 1,
+					// 	read_only: 1,
+					// 	columns: 1
+					// },
 					{
 						fieldtype: 'Int',
 						fieldname: 'total_batches',

@@ -9,7 +9,6 @@
   "item_code",
   "item_name",
   "item_manufacturing_remark",
-  "batch_size",
   "bom",
   "total_batch_qty",
   "total_qty",
@@ -17,21 +16,29 @@
   "custom__item_packaging_material",
   "column_break_pspq",
   "week_1",
+  "blender_week_1",
+  "batch_capacity_1",
   "w1_batch",
   "w1_batch_qty",
   "w1_wo",
   "column_break_ohyy",
   "week_2",
+  "blender_week_2",
+  "batch_capacity_2",
   "w2_batch",
   "w2_batch_qty",
   "w2_wo",
   "column_break_cbkq",
   "week_3",
+  "blender_week_3",
+  "batch_capacity_3",
   "w3_batch",
   "w3_batch_qty",
   "w3_wo",
   "column_break_jgmb",
   "week_4",
+  "blender_week_4",
+  "batch_capacity_4",
   "w4_batch",
   "w4_batch_qty",
   "w4_wo"
@@ -52,14 +59,6 @@
    "fieldtype": "Data",
    "label": "Item Name",
    "read_only": 1
-  },
-  {
-   "columns": 1,
-   "fieldname": "batch_size",
-   "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Batch Size",
-   "reqd": 1
   },
   {
    "columns": 1,
@@ -241,13 +240,65 @@
    "label": "W4 Batch Qty",
    "non_negative": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "blender_week_1",
+   "fieldtype": "Link",
+   "label": "Blender Week 1",
+   "options": "Workstation"
+  },
+  {
+   "fieldname": "blender_week_2",
+   "fieldtype": "Link",
+   "label": "Blender Week 2",
+   "options": "Workstation"
+  },
+  {
+   "fieldname": "blender_week_3",
+   "fieldtype": "Link",
+   "label": "Blender Week 3",
+   "options": "Workstation"
+  },
+  {
+   "fieldname": "blender_week_4",
+   "fieldtype": "Link",
+   "label": "Blender Week 4",
+   "options": "Workstation"
+  },
+  {
+   "fetch_from": "blender_week_1.custom_blender_capacity",
+   "fieldname": "batch_capacity_1",
+   "fieldtype": "Data",
+   "label": "Batch Capacity 1",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "blender_week_2.custom_blender_capacity",
+   "fieldname": "batch_capacity_2",
+   "fieldtype": "Data",
+   "label": "Batch Capacity 2",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "blender_week_3.custom_blender_capacity",
+   "fieldname": "batch_capacity_3",
+   "fieldtype": "Data",
+   "label": "Batch Capacity 3",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "blender_week_4.custom_blender_capacity",
+   "fieldname": "batch_capacity_4",
+   "fieldtype": "Data",
+   "label": "Batch Capacity 4",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-01-08 22:28:49.520985",
+ "modified": "2026-06-25 17:25:17.728881",
  "modified_by": "Administrator",
  "module": "Sales Forecast",
  "name": "Forecast Club Item",
