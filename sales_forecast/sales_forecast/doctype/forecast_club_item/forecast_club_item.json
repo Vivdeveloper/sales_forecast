@@ -12,8 +12,6 @@
   "bom",
   "total_batch_qty",
   "total_qty",
-  "custom_company_stock",
-  "custom__item_packaging_material",
   "column_break_pspq",
   "week_1",
   "blender_week_1",
@@ -41,7 +39,17 @@
   "batch_capacity_4",
   "w4_batch",
   "w4_batch_qty",
-  "w4_wo"
+  "w4_wo",
+  "stocks_section",
+  "custom_plant_1_fg_loose_qty",
+  "column_break_oaix",
+  "custom_plant_2_fg_loose_qty",
+  "column_break_bhhn",
+  "custom_mainstore_fg",
+  "column_break_tpdg",
+  "custom_company_stock",
+  "section_break_pkg",
+  "custom__item_packaging_material"
  ],
  "fields": [
   {
@@ -198,6 +206,28 @@
    "read_only": 1
   },
   {
+   "fieldname": "custom_plant_1_fg_loose_qty",
+   "fieldtype": "Float",
+   "label": "Plant 1 FG (Loose qty)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "custom_plant_2_fg_loose_qty",
+   "fieldtype": "Float",
+   "label": "Plant 2 FG (Loose qty)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "custom_mainstore_fg",
+   "fieldtype": "Float",
+   "label": "Mainstore FG",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_pkg",
+   "fieldtype": "Section Break"
+  },
+  {
    "fieldname": "custom__item_packaging_material",
    "fieldtype": "Small Text",
    "label": "Packing Material Stock",
@@ -292,13 +322,30 @@
    "fieldtype": "Data",
    "label": "Batch Capacity 4",
    "read_only": 1
+  },
+  {
+   "fieldname": "stocks_section",
+   "fieldtype": "Section Break",
+   "label": "Stocks"
+  },
+  {
+   "fieldname": "column_break_oaix",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_bhhn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_tpdg",
+   "fieldtype": "Column Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-06-25 17:25:17.728881",
+ "modified": "2026-06-26 17:23:30.307872",
  "modified_by": "Administrator",
  "module": "Sales Forecast",
  "name": "Forecast Club Item",

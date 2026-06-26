@@ -6,6 +6,13 @@ from frappe.model.document import Document
 from frappe.utils import flt
 
 
+FG_WAREHOUSE_STOCK_FIELDS = {
+	"custom_plant_1_fg_loose_qty": "Plant 1 FG - PTPL",
+	"custom_plant_2_fg_loose_qty": "Plant 2 FG - PTPL",
+	"custom_mainstore_fg": "Main Store FG - PTPL",
+}
+
+
 class ForecastClub(Document):
 	def validate(self):
 		self.validate_items()
@@ -18,13 +25,14 @@ class ForecastClub(Document):
 	def before_save(self):
 		"""Calculate totals for each item and set custom_company_stock, custom_item_packaging_material"""
 		for item in self.items:
-			batch_size = item.batch_size or 0
-
-			# Calculate weekly batch quantities (batch_count * batch_size)
-			item.w1_batch_qty = (item.w1_batch or 0) * batch_size
-			item.w2_batch_qty = (item.w2_batch or 0) * batch_size
-			item.w3_batch_qty = (item.w3_batch or 0) * batch_size
-			item.w4_batch_qty = (item.w4_batch or 0) * batch_size
+			if flt(item.batch_capacity_1):
+				item.w1_batch_qty = (item.w1_batch or 0) * flt(item.batch_capacity_1)
+			if flt(item.batch_capacity_2):
+				item.w2_batch_qty = (item.w2_batch or 0) * flt(item.batch_capacity_2)
+			if flt(item.batch_capacity_3):
+				item.w3_batch_qty = (item.w3_batch or 0) * flt(item.batch_capacity_3)
+			if flt(item.batch_capacity_4):
+				item.w4_batch_qty = (item.w4_batch or 0) * flt(item.batch_capacity_4)
 
 			# Calculate total_batch_qty as sum of all weekly batches
 			item.total_batch_qty = (
@@ -34,12 +42,27 @@ class ForecastClub(Document):
 				(item.w4_batch or 0)
 			)
 
-			# Calculate total_qty as total_batch_qty * batch_size
-			item.total_qty = item.total_batch_qty * batch_size
+			# Calculate total_qty as sum of all weekly batch quantities
+			item.total_qty = (
+				(item.w1_batch_qty or 0) +
+				(item.w2_batch_qty or 0) +
+				(item.w3_batch_qty or 0) +
+				(item.w4_batch_qty or 0)
+			)
 
 			# Set custom_company_stock: total stock for this item across all companies
 			if item.item_code and hasattr(item, "custom_company_stock"):
 				item.custom_company_stock = self._get_item_stock_in_all_companies(item.item_code)
+
+			# Set warehouse-wise FG stock fields (Plant 1 FG, Plant 2 FG, Mainstore FG)
+			if item.item_code:
+				for fieldname, warehouse in FG_WAREHOUSE_STOCK_FIELDS.items():
+					if hasattr(item, fieldname):
+						item.set(fieldname, self._get_item_stock_in_warehouse(item.item_code, warehouse))
+
+				# Mainstore FG = Main Store FG warehouse stock + total loose qty of all packing materials
+				if hasattr(item, "custom_mainstore_fg"):
+					item.custom_mainstore_fg = flt(item.custom_mainstore_fg) + self._get_total_packing_loose_qty(item.item_code, company=self.company)
 
 			# Set custom_item_packaging_material / custom__item_packaging_material: packaging materials with stock in company (item - stock)
 			packaging_value = self._get_item_packaging_materials(item.item_code, company=self.company) if item.item_code else ""
@@ -71,9 +94,45 @@ class ForecastClub(Document):
 		""", (item_code, company))
 		return flt(result[0][0]) if result else 0
 
+	def _get_item_stock_in_warehouse(self, item_code, warehouse):
+		"""Return actual_qty for item in a specific warehouse."""
+		if not item_code or not warehouse:
+			return 0
+		qty = frappe.db.get_value(
+			"Bin",
+			{"item_code": item_code, "warehouse": warehouse},
+			"actual_qty",
+		)
+		return flt(qty)
+
+	def _get_total_packing_loose_qty(self, item_code, company=None):
+		"""Sum of loose qty (Filling Capacity * company stock) across all packing materials of the item."""
+		child_doctype, item_field = self._get_packing_material_details_config()
+		if not item_code or not company or not child_doctype or not item_field or not frappe.db.table_exists(child_doctype):
+			return 0
+		try:
+			rows = frappe.get_all(
+				child_doctype,
+				filters={"parent": item_code, "parenttype": "Item"},
+				fields=[item_field],
+				pluck=item_field,
+			)
+		except Exception:
+			return 0
+		total = 0
+		for pkg_item in rows:
+			if not pkg_item:
+				continue
+			stock = self._get_item_stock_in_company(pkg_item, company)
+			filling_capacity = flt(frappe.db.get_value("Item", pkg_item, "custom_filling_capacity"))
+			total += filling_capacity * stock
+		return total
+
 	def _get_item_packaging_materials(self, item_code, company=None):
 		"""Return string: for each packaging material from Item's 'Packing Material Details',
-		show 'item - stock in company'. Format: 'ITEM-A - 10, ITEM-B - 20'.
+		show both the warehouse stock and the loose qty. Loose qty = packing item's Filling
+		Capacity (from Item master) * its available qty (company stock).
+		Format: 'ITEM-A - 2.0 (Loose: 20.0), ITEM-B - 1.0 (Loose: 210.0)'.
 		"""
 		child_doctype, item_field = self._get_packing_material_details_config()
 		if not child_doctype or not item_field or not frappe.db.table_exists(child_doctype):
@@ -92,7 +151,9 @@ class ForecastClub(Document):
 				parts = []
 				for pkg_item in items_list:
 					stock = self._get_item_stock_in_company(pkg_item, company)
-					parts.append(f"{pkg_item} - {stock}")
+					filling_capacity = flt(frappe.db.get_value("Item", pkg_item, "custom_filling_capacity"))
+					loose_qty = filling_capacity * stock
+					parts.append(f"{pkg_item} - {stock} (Loose: {loose_qty})")
 				return ", ".join(parts)
 			return ", ".join(items_list)
 		except Exception:
@@ -123,10 +184,15 @@ class ForecastClub(Document):
 		doc = frappe.new_doc("Forecast Club")
 		stock = doc._get_item_stock_in_all_companies(item_code)
 		packaging = doc._get_item_packaging_materials(item_code, company=company)
-		return {
+		result = {
 			"custom_company_stock": stock,
 			"custom_item_packaging_material": packaging,
 		}
+		for fieldname, warehouse in FG_WAREHOUSE_STOCK_FIELDS.items():
+			result[fieldname] = doc._get_item_stock_in_warehouse(item_code, warehouse)
+		# Mainstore FG = Main Store FG warehouse stock + total loose qty of all packing materials
+		result["custom_mainstore_fg"] = flt(result.get("custom_mainstore_fg")) + doc._get_total_packing_loose_qty(item_code, company=company)
+		return result
 
 	def check_duplicate_items(self):
 		"""Check for duplicate items in the items table"""
@@ -173,14 +239,8 @@ class ForecastClub(Document):
 						)
 					)
 
-			# Calculate total_batch_qty
-			total_batch = (item.w1_batch or 0) + (item.w2_batch or 0) + (item.w3_batch or 0) + (item.w4_batch or 0)
-
-			# Only validate if at least one weekly batch is set
-			if total_batch > 0:
-				# Check if batch_size is set when batches are entered
-				if not item.batch_size or item.batch_size == 0:
-					frappe.throw(_("Row #{0}: Batch Size is required when weekly batches are set for item {1}").format(idx, item.item_code))
+			# (No batch-size validation here: weekly batch sizes come from the blender
+			# capacity and may legitimately be unset at save time.)
 
 	@frappe.whitelist()
 	def fetch_material_request_items(self):
@@ -639,8 +699,8 @@ def create_work_orders_batch_wise(forecast_club, week, items):
 
 	for item_data in items:
 		forecast_club_item_name = item_data.get("forecast_club_item")
-		batches_to_create = int(item_data.get("batches", 0))
-		batch_size = item_data.get("batch_size", 0)
+		batches_to_create = int(flt(item_data.get("batches", 0)))
+		batch_size = flt(item_data.get("batch_size", 0))
 
 		if batches_to_create <= 0 or batch_size <= 0:
 			continue
