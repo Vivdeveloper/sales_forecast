@@ -9,9 +9,10 @@
   "item_code",
   "item_name",
   "item_manufacturing_remark",
-  "bom",
+  "column_break_item",
   "total_batch_qty",
   "total_qty",
+  "bom",
   "column_break_pspq",
   "week_1",
   "blender_week_1",
@@ -46,7 +47,7 @@
   "custom_plant_2_fg_loose_qty",
   "column_break_bhhn",
   "custom_mainstore_fg",
-  "column_break_tpdg",
+  "column_break_euab",
   "custom_company_stock",
   "section_break_pkg",
   "custom__item_packaging_material"
@@ -78,8 +79,13 @@
    "reqd": 1
   },
   {
-   "fieldname": "column_break_pspq",
+   "fieldname": "column_break_item",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_pspq",
+   "fieldtype": "Section Break",
+   "label": "Production Plan"
   },
   {
    "columns": 1,
@@ -337,7 +343,7 @@
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "column_break_tpdg",
+   "fieldname": "column_break_euab",
    "fieldtype": "Column Break"
   }
  ],
@@ -345,7 +351,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-06-26 17:23:30.307872",
+ "modified": "2026-06-27 17:01:24.757213",
  "modified_by": "Administrator",
  "module": "Sales Forecast",
  "name": "Forecast Club Item",

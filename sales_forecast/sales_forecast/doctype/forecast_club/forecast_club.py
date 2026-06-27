@@ -50,9 +50,12 @@ class ForecastClub(Document):
 				(item.w4_batch_qty or 0)
 			)
 
-			# Set custom_company_stock: total stock for this item across all companies
+			# Set custom_company_stock: total FG stock across all companies + packing material loose qty
 			if item.item_code and hasattr(item, "custom_company_stock"):
-				item.custom_company_stock = self._get_item_stock_in_all_companies(item.item_code)
+				item.custom_company_stock = (
+					self._get_item_stock_in_all_companies(item.item_code)
+					+ self._get_total_packing_loose_qty(item.item_code)
+				)
 
 			# Set warehouse-wise FG stock fields (Plant 1 FG, Plant 2 FG, Mainstore FG)
 			if item.item_code:
@@ -106,9 +109,10 @@ class ForecastClub(Document):
 		return flt(qty)
 
 	def _get_total_packing_loose_qty(self, item_code, company=None):
-		"""Sum of loose qty (Filling Capacity * company stock) across all packing materials of the item."""
+		"""Sum of loose qty (Filling Capacity * stock) across all packing materials of the item.
+		If company is given, use that company's stock; otherwise use stock across all companies."""
 		child_doctype, item_field = self._get_packing_material_details_config()
-		if not item_code or not company or not child_doctype or not item_field or not frappe.db.table_exists(child_doctype):
+		if not item_code or not child_doctype or not item_field or not frappe.db.table_exists(child_doctype):
 			return 0
 		try:
 			rows = frappe.get_all(
@@ -123,7 +127,10 @@ class ForecastClub(Document):
 		for pkg_item in rows:
 			if not pkg_item:
 				continue
-			stock = self._get_item_stock_in_company(pkg_item, company)
+			if company:
+				stock = self._get_item_stock_in_company(pkg_item, company)
+			else:
+				stock = self._get_item_stock_in_all_companies(pkg_item)
 			filling_capacity = flt(frappe.db.get_value("Item", pkg_item, "custom_filling_capacity"))
 			total += filling_capacity * stock
 		return total
@@ -182,7 +189,7 @@ class ForecastClub(Document):
 		if not item_code:
 			return {"custom_company_stock": 0, "custom_item_packaging_material": ""}
 		doc = frappe.new_doc("Forecast Club")
-		stock = doc._get_item_stock_in_all_companies(item_code)
+		stock = doc._get_item_stock_in_all_companies(item_code) + doc._get_total_packing_loose_qty(item_code)
 		packaging = doc._get_item_packaging_materials(item_code, company=company)
 		result = {
 			"custom_company_stock": stock,
