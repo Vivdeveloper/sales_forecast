@@ -142,8 +142,7 @@
    "fieldname": "set_warehouse_2",
    "fieldtype": "Link",
    "label": "Set Warehouse 2",
-   "options": "Warehouse",
-   "reqd": 1
+   "options": "Warehouse"
   }
  ],
  "grid_page_length": 50,
