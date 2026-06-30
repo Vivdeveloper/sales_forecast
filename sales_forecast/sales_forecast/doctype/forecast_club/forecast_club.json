@@ -2,7 +2,7 @@
  "actions": [],
  "allow_rename": 1,
  "autoname": "naming_series:",
- "creation": "2026-01-06 13:15:23.746704",
+ "creation": "2026-06-30 14:12:09.573649",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
@@ -15,6 +15,7 @@
   "forecast_start_date",
   "forecast_end_date",
   "amended_from",
+  "plant",
   "section_break_zgmv",
   "items",
   "section_break_bfzn",
@@ -115,6 +116,14 @@
    "reqd": 1
   },
   {
+   "fieldname": "plant",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Plant",
+   "options": "\nPlant 1\nPlant 2",
+   "reqd": 1
+  },
+  {
    "allow_on_submit": 1,
    "fieldname": "status",
    "fieldtype": "Select",
@@ -158,7 +167,7 @@
    "link_fieldname": "custom_forecast_club"
   }
  ],
- "modified": "2026-01-11 21:04:40.118936",
+ "modified": "2026-06-30 14:21:40.550072",
  "modified_by": "Administrator",
  "module": "Sales Forecast",
  "name": "Forecast Club",

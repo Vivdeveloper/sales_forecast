@@ -69,6 +69,20 @@ frappe.ui.form.on("Forecast Club", {
 			};
 		};
 		frm.set_query("bom", "items", bom_get_query);
+
+		// Items: only show items belonging to the selected Plant
+		// (Item.custom_manufacturing_location == plant's FG warehouse)
+		const PLANT_WAREHOUSE = {
+			"Plant 1": "Plant 1 FG - PTPL",
+			"Plant 2": "Plant 2 FG - PTPL"
+		};
+		frm.set_query("item_code", "items", function () {
+			const warehouse = PLANT_WAREHOUSE[frm.doc.plant];
+			if (!warehouse) {
+				return {};
+			}
+			return { filters: { custom_manufacturing_location: warehouse } };
+		});
 		// Apply BOM query and focus handler so we know which row's item_code to use
 		function apply_bom_query_to_rows() {
 			if (!grid || !grid.grid_rows) return;
@@ -208,6 +222,12 @@ frappe.ui.form.on("Forecast Club", {
 
 	company(frm) {
 		fetch_sales_forecasts_if_dates_set(frm);
+	},
+
+	plant(frm) {
+		// Re-fetch items for the newly selected plant (items are filtered by
+		// the item's Manufacturing Location matching the plant's FG warehouse)
+		fetch_sales_forecasts_if_dates_set(frm);
 	}
 });
 
@@ -255,8 +275,8 @@ function warn_zero_capacity_or_batch_qty(frm) {
 }
 
 function fetch_sales_forecasts_if_dates_set(frm) {
-	// Only fetch if all required fields are set
-	if (frm.doc.forecast_start_date && frm.doc.forecast_end_date && frm.doc.company) {
+	// Only fetch if all required fields are set (plant drives item filtering)
+	if (frm.doc.forecast_start_date && frm.doc.forecast_end_date && frm.doc.company && frm.doc.plant) {
 		frm.call({
 			method: 'fetch_sales_forecasts',
 			doc: frm.doc,

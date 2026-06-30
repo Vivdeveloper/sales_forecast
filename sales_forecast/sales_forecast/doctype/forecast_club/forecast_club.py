@@ -12,11 +12,20 @@ FG_WAREHOUSE_STOCK_FIELDS = {
 	"custom_mainstore_fg": "Main Store FG - PTPL",
 }
 
+# Plant selection maps to the item's Manufacturing Location (Item.custom_manufacturing_location).
+# Only items whose manufacturing location matches the selected plant's warehouse belong to that plant.
+PLANT_WAREHOUSE = {
+	"Plant 1": "Plant 1 FG - PTPL",
+	"Plant 2": "Plant 2 FG - PTPL",
+}
+
 
 class ForecastClub(Document):
 	def validate(self):
 		self.validate_items()
 		self.check_duplicate_items()
+		self.validate_plant_items()
+		self.validate_duplicate_date_range()
 
 	def on_submit(self):
 		"""Set initial status on submit"""
@@ -227,6 +236,89 @@ class ForecastClub(Document):
 			# Store item_code with its row number
 			item_codes[item.item_code] = idx
 
+	def validate_plant_items(self):
+		"""Every item must belong to the selected Plant.
+
+		An item belongs to a plant when its Manufacturing Location
+		(Item.custom_manufacturing_location) is that plant's FG warehouse.
+		Two plants are supported: Plant 1 -> "Plant 1 FG - PTPL", Plant 2 -> "Plant 2 FG - PTPL".
+		"""
+		from frappe import _
+
+		if not self.plant or not self.items:
+			return
+
+		plant_warehouse = PLANT_WAREHOUSE.get(self.plant)
+		if not plant_warehouse:
+			return
+
+		for idx, item in enumerate(self.items, start=1):
+			if not item.item_code:
+				continue
+
+			manufacturing_location = frappe.db.get_value(
+				"Item", item.item_code, "custom_manufacturing_location"
+			)
+
+			if manufacturing_location != plant_warehouse:
+				frappe.throw(
+					_(
+						"Row #{0}: Item {1} does not belong to {2}. Its Manufacturing Location is {3}, "
+						"but {2} expects {4}."
+					).format(
+						idx,
+						frappe.bold(item.item_code),
+						frappe.bold(self.plant),
+						frappe.bold(manufacturing_location or _("not set")),
+						frappe.bold(plant_warehouse),
+					)
+				)
+
+	def validate_duplicate_date_range(self):
+		"""Block another Forecast Club for the same company + plant whose forecast date
+		range overlaps this one, so the same month cannot be forecasted twice for a plant.
+		"""
+		from frappe import _
+		from frappe.utils import getdate
+
+		if not self.forecast_start_date or not self.forecast_end_date:
+			return
+
+		if getdate(self.forecast_end_date) < getdate(self.forecast_start_date):
+			frappe.throw(_("Forecast End Date cannot be before Forecast Start Date"))
+
+		filters = {
+			"company": self.company,
+			"docstatus": ["!=", 2],
+			"name": ["!=", self.name or "new-forecast-club"],
+			# Overlap: existing.start <= this.end AND existing.end >= this.start
+			"forecast_start_date": ["<=", self.forecast_end_date],
+			"forecast_end_date": [">=", self.forecast_start_date],
+		}
+		if self.plant:
+			filters["plant"] = self.plant
+
+		existing = frappe.db.get_value(
+			"Forecast Club",
+			filters,
+			["name", "forecast_start_date", "forecast_end_date"],
+			as_dict=True,
+		)
+
+		if existing:
+			frappe.throw(
+				_(
+					"A Forecast Club ({0}) already exists for {1}{2} covering {3} to {4}, which overlaps "
+					"the selected dates. You cannot create another forecast for the same period."
+				).format(
+					frappe.bold(existing.name),
+					frappe.bold(self.company),
+					_(" / {0}").format(self.plant) if self.plant else "",
+					frappe.bold(existing.forecast_start_date),
+					frappe.bold(existing.forecast_end_date),
+				)
+			)
+
 	def validate_items(self):
 		"""Validate items before save"""
 		from frappe import _
@@ -425,8 +517,19 @@ class ForecastClub(Document):
 				items_dict[key]["week_3"] += (item.week_3 or 0)
 				items_dict[key]["week_4"] += (item.week_4 or 0)
 
+		# Restrict to the selected plant's items (Item.custom_manufacturing_location == plant warehouse)
+		plant_warehouse = PLANT_WAREHOUSE.get(self.plant) if self.plant else None
+
 		# Add aggregated items to the items child table
 		for item_data in items_dict.values():
+			# Skip items that do not belong to the selected plant
+			if plant_warehouse:
+				manufacturing_location = frappe.db.get_value(
+					"Item", item_data["item_code"], "custom_manufacturing_location"
+				)
+				if manufacturing_location != plant_warehouse:
+					continue
+
 			# Get BOM for the item if it exists
 			bom = frappe.db.get_value("BOM", {"item": item_data["item_code"], "is_default": 1, "is_active": 1}, "name")
 
@@ -440,7 +543,8 @@ class ForecastClub(Document):
 				"week_4": item_data["week_4"]
 			})
 
-		frappe.msgprint(f"Fetched {len(items_dict)} items from {len(forecast_docs)} sales forecasts")
+		plant_note = f" for {self.plant}" if self.plant else ""
+		frappe.msgprint(f"Fetched {len(self.items)} items{plant_note} from {len(forecast_docs)} sales forecasts")
 
 	@frappe.whitelist()
 	def create_material_requests(self):
