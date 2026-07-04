@@ -110,31 +110,6 @@ frappe.ui.form.on("Forecast Club", {
 			};
 		}
 
-		// Add "Create Material Request" button
-		if (frm.doc.docstatus === 1
-			&& frm.doc.material_request_items
-			&& frm.doc.material_request_items.length > 0
-			&& frm.doc.status === "Forecast Planned") {
-
-			frm.add_custom_button(__('Create Material Request'), function() {
-				frm.call({
-					method: 'create_material_requests',
-					doc: frm.doc,
-					freeze: true,
-					freeze_message: __('Creating Material Request...'),
-					callback: function(r) {
-						if (!r.exc && r.message) {
-							frappe.show_alert({
-								message: __('Material Request created successfully'),
-								indicator: 'green'
-							});
-							frm.reload_doc();
-						}
-					}
-				});
-			});
-		}
-
 		// Add "Split Work Orders" button
 		if (frm.doc.docstatus === 1 && frm.doc.items && frm.doc.items.length > 0) {
 			frm.add_custom_button(__('Split Work Orders'), function() {
