@@ -12,6 +12,10 @@
   "column_break_item",
   "total_batch_qty",
   "total_qty",
+  "last_month_sales",
+  "current_stock",
+  "forecast_quantity",
+  "planned_quantity",
   "bom",
   "column_break_pspq",
   "week_1",
@@ -203,6 +207,30 @@
    "fieldname": "total_qty",
    "fieldtype": "Float",
    "label": "Total Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_month_sales",
+   "fieldtype": "Float",
+   "label": "Last Month Sales",
+   "read_only": 1
+  },
+  {
+   "fieldname": "current_stock",
+   "fieldtype": "Float",
+   "label": "Current Stock",
+   "read_only": 1
+  },
+  {
+   "fieldname": "forecast_quantity",
+   "fieldtype": "Float",
+   "label": "Forecast Quantity",
+   "read_only": 1
+  },
+  {
+   "fieldname": "planned_quantity",
+   "fieldtype": "Float",
+   "label": "Planned Quantity",
    "read_only": 1
   },
   {

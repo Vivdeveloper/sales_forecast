@@ -59,6 +59,24 @@ class ForecastClub(Document):
 				(item.w4_batch_qty or 0)
 			)
 
+			# Forecast Quantity: total sales-forecast demand (sum of weekly forecast qtys)
+			if hasattr(item, "forecast_quantity"):
+				item.forecast_quantity = (
+					flt(item.week_1) + flt(item.week_2) + flt(item.week_3) + flt(item.week_4)
+				)
+
+			# Planned Quantity: total planned production qty (same as total_qty)
+			if hasattr(item, "planned_quantity"):
+				item.planned_quantity = flt(item.total_qty)
+
+			# Current Stock: item's current stock in the selected company (all its warehouses)
+			if item.item_code and hasattr(item, "current_stock"):
+				item.current_stock = self._get_item_stock_in_company(item.item_code, self.company)
+
+			# Last Month Sales: qty sold via submitted Sales Invoices in the previous calendar month
+			if item.item_code and hasattr(item, "last_month_sales"):
+				item.last_month_sales = self._get_last_month_sales(item.item_code)
+
 			# Set custom_company_stock: total FG stock across all companies + packing material loose qty
 			if item.item_code and hasattr(item, "custom_company_stock"):
 				item.custom_company_stock = (
@@ -104,6 +122,26 @@ class ForecastClub(Document):
 			INNER JOIN `tabWarehouse` w ON b.warehouse = w.name
 			WHERE b.item_code = %s AND w.company = %s
 		""", (item_code, company))
+		return flt(result[0][0]) if result else 0
+
+	def _get_last_month_sales(self, item_code):
+		"""Return qty of the item sold via submitted Sales Invoices in the previous
+		calendar month (relative to today) for this document's company."""
+		from frappe.utils import add_months, get_first_day, get_last_day, today
+
+		prev_month_ref = add_months(today(), -1)
+		first_day = get_first_day(prev_month_ref)
+		last_day = get_last_day(prev_month_ref)
+
+		result = frappe.db.sql("""
+			SELECT COALESCE(SUM(sii.qty), 0)
+			FROM `tabSales Invoice Item` sii
+			INNER JOIN `tabSales Invoice` si ON sii.parent = si.name
+			WHERE sii.item_code = %s
+			  AND si.docstatus = 1
+			  AND si.company = %s
+			  AND si.posting_date BETWEEN %s AND %s
+		""", (item_code, self.company, first_day, last_day))
 		return flt(result[0][0]) if result else 0
 
 	def _get_item_stock_in_warehouse(self, item_code, warehouse):
@@ -286,6 +324,11 @@ class ForecastClub(Document):
 
 		if getdate(self.forecast_end_date) < getdate(self.forecast_start_date):
 			frappe.throw(_("Forecast End Date cannot be before Forecast Start Date"))
+
+		# "Special" forecasts are allowed to repeat the same company + plant + month
+		# (a Reason is captured instead). Only "Normal" forecasts are blocked.
+		if self.forecast_type == "Special":
+			return
 
 		filters = {
 			"company": self.company,

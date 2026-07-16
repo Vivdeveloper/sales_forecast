@@ -16,6 +16,8 @@
   "forecast_end_date",
   "amended_from",
   "plant",
+  "forecast_type",
+  "special_reason",
   "section_break_zgmv",
   "items",
   "section_break_bfzn",
@@ -41,6 +43,22 @@
    "print_hide": 1,
    "read_only": 1,
    "search_index": 1
+  },
+  {
+   "default": "Normal",
+   "fieldname": "forecast_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Forecast Type",
+   "options": "Normal\nSpecial",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.forecast_type=='Special'",
+   "fieldname": "special_reason",
+   "fieldtype": "Small Text",
+   "label": "Reason",
+   "mandatory_depends_on": "eval:doc.forecast_type=='Special'"
   },
   {
    "fieldname": "section_break_zgmv",
@@ -213,6 +231,17 @@
    "read": 1,
    "report": 1,
    "role": "Manufacturing User",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "CEO",
    "share": 1,
    "submit": 1,
    "write": 1
