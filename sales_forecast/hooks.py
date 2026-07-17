@@ -79,15 +79,6 @@ app_license = "mit"
 # 	"filters": "sales_forecast.utils.jinja_filters"
 # }
 
-# Fixtures
-# --------
-# Ship the Forecast Sales Person approval workflow (Special forecasts need CEO approval)
-# and its supporting state/action masters so they deploy via `bench migrate`.
-fixtures = [
-	{"dt": "Workflow", "filters": [["name", "in", ["Forecast Sales Person Approval"]]]},
-	{"dt": "Workflow State", "filters": [["name", "in", ["Draft", "Pending Approval", "Approved", "Rejected"]]]},
-	{"dt": "Workflow Action Master", "filters": [["name", "in", ["Submit", "Request Approval", "Approve", "Reject", "Reopen"]]]},
-]
 
 # Installation
 # ------------
