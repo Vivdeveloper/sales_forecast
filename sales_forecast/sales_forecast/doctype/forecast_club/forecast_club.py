@@ -234,13 +234,23 @@ class ForecastClub(Document):
 	def get_item_stock_and_packaging(item_code, company=None):
 		"""Return custom_company_stock and packaging list (item - stock in company) for an item (for client-side use)."""
 		if not item_code:
-			return {"custom_company_stock": 0, "custom_item_packaging_material": ""}
+			return {
+				"custom_company_stock": 0,
+				"custom_item_packaging_material": "",
+				"current_stock": 0,
+				"last_month_sales": 0,
+			}
 		doc = frappe.new_doc("Forecast Club")
+		# _get_last_month_sales reads self.company, so the throwaway doc has to carry it.
+		doc.company = company
 		stock = doc._get_item_stock_in_all_companies(item_code) + doc._get_total_packing_loose_qty(item_code)
 		packaging = doc._get_item_packaging_materials(item_code, company=company)
 		result = {
 			"custom_company_stock": stock,
 			"custom_item_packaging_material": packaging,
+			# Same helpers before_save uses, so the pre-save preview matches what gets stored.
+			"current_stock": doc._get_item_stock_in_company(item_code, company),
+			"last_month_sales": doc._get_last_month_sales(item_code),
 		}
 		for fieldname, warehouse in FG_WAREHOUSE_STOCK_FIELDS.items():
 			result[fieldname] = doc._get_item_stock_in_warehouse(item_code, warehouse)

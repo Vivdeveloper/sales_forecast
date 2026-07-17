@@ -359,6 +359,11 @@ function fetch_item_stock_and_packaging(frm, cdt, cdn) {
 		callback: function(r) {
 			if (r && r.message) {
 				frappe.model.set_value(cdt, cdn, 'custom_company_stock', r.message.custom_company_stock);
+				['current_stock', 'last_month_sales'].forEach(function(f) {
+					if (r.message[f] !== undefined) {
+						frappe.model.set_value(cdt, cdn, f, r.message[f]);
+					}
+				});
 				['custom_plant_1_fg_loose_qty', 'custom_plant_2_fg_loose_qty', 'custom_mainstore_fg'].forEach(function(f) {
 					if (r.message[f] !== undefined) {
 						frappe.model.set_value(cdt, cdn, f, r.message[f]);
@@ -389,7 +394,7 @@ function refresh_all_rows_stock(frm) {
 				if (!r || !r.message) return;
 				let m = r.message;
 				row.custom_company_stock = m.custom_company_stock;
-				['custom_plant_1_fg_loose_qty', 'custom_plant_2_fg_loose_qty', 'custom_mainstore_fg'].forEach(function(f) {
+				['current_stock', 'last_month_sales', 'custom_plant_1_fg_loose_qty', 'custom_plant_2_fg_loose_qty', 'custom_mainstore_fg'].forEach(function(f) {
 					if (m[f] !== undefined) row[f] = m[f];
 				});
 				if (m.custom_item_packaging_material !== undefined) {
@@ -457,6 +462,12 @@ function calculate_totals(frm, cdt, cdn) {
 
 	// Total qty = sum of weekly batch quantities
 	frappe.model.set_value(cdt, cdn, 'total_qty', q1 + q2 + q3 + q4);
+
+	// Forecast Quantity = total weekly demand; Planned Quantity = total planned production.
+	// before_save recomputes both server-side; mirroring them here shows them before save.
+	frappe.model.set_value(cdt, cdn, 'forecast_quantity',
+		flt(row.week_1) + flt(row.week_2) + flt(row.week_3) + flt(row.week_4));
+	frappe.model.set_value(cdt, cdn, 'planned_quantity', q1 + q2 + q3 + q4);
 
 	frm.refresh_field('items');
 }
