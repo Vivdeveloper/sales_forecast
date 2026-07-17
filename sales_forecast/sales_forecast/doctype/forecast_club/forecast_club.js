@@ -387,6 +387,9 @@ function refresh_all_rows_stock(frm) {
 	if (!frm.doc.items || !frm.doc.items.length) return;
 	frm.doc.items.forEach(function(row) {
 		if (!row.item_code) return;
+		// Derived from values already on the row, so no server round-trip needed.
+		row.forecast_quantity = flt(row.week_1) + flt(row.week_2) + flt(row.week_3) + flt(row.week_4);
+		row.planned_quantity = flt(row.w1_batch_qty) + flt(row.w2_batch_qty) + flt(row.w3_batch_qty) + flt(row.w4_batch_qty);
 		frappe.call({
 			method: 'sales_forecast.sales_forecast.doctype.forecast_club.forecast_club.get_item_stock_and_packaging',
 			args: { item_code: row.item_code, company: frm.doc.company },
