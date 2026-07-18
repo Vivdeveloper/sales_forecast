@@ -447,6 +447,13 @@ class ForecastClub(Document):
 			if not item.total_qty:
 				continue
 
+			# BOMs are built for `bom.quantity` units of the finished good (often > 1,
+			# e.g. 113.83), so each BOM Item qty must be scaled down to a per-unit rate
+			# before multiplying by total_qty. This mirrors ERPNext's get_bom_items_as_dict
+			# (bom_item.qty / bom.quantity), which is what the Work Order uses — without it
+			# the required qty here comes out bom.quantity times too high.
+			bom_quantity = flt(frappe.db.get_value("BOM", item.bom, "quantity")) or 1
+
 			# Get BOM items (raw materials)
 			bom_items = frappe.db.get_all(
 				"BOM Item",
@@ -457,8 +464,8 @@ class ForecastClub(Document):
 			for bom_item in bom_items:
 				key = bom_item.item_code
 
-				# Calculate required quantity: BOM qty * total_qty
-				required_bom_qty = bom_item.qty * item.total_qty
+				# Required quantity: per-unit BOM qty * total_qty
+				required_bom_qty = (bom_item.qty / bom_quantity) * item.total_qty
 
 				if key not in materials_dict:
 					materials_dict[key] = {
