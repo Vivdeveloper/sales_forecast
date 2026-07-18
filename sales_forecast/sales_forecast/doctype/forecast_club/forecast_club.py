@@ -124,10 +124,13 @@ class ForecastClub(Document):
 		""", (item_code, company))
 		return flt(result[0][0]) if result else 0
 
-	def _get_last_month_sales(self, item_code):
-		"""Return qty of the item sold via submitted Sales Invoices in the previous
+	def _get_item_sales_qty_last_month(self, item_code):
+		"""Qty of a single item sold via submitted Sales Invoices in the previous
 		calendar month (relative to today) for this document's company."""
 		from frappe.utils import add_months, get_first_day, get_last_day, today
+
+		if not item_code:
+			return 0
 
 		prev_month_ref = add_months(today(), -1)
 		first_day = get_first_day(prev_month_ref)
@@ -143,6 +146,35 @@ class ForecastClub(Document):
 			  AND si.posting_date BETWEEN %s AND %s
 		""", (item_code, self.company, first_day, last_day))
 		return flt(result[0][0]) if result else 0
+
+	def _get_last_month_sales(self, item_code):
+		"""Last month sales in loose (base) units. Sales happen on the FG's packing
+		materials (the sellable SKUs), so convert each packing material's sold qty into
+		loose units the same way loose stock is computed: Filling Capacity * sold qty.
+
+		e.g. LUBECOGREEN210 sold 2 units last month * Filling Capacity 210 = 420 loose.
+		"""
+		child_doctype, item_field = self._get_packing_material_details_config()
+		if not item_code or not child_doctype or not item_field or not frappe.db.table_exists(child_doctype):
+			return 0
+		try:
+			packing_items = frappe.get_all(
+				child_doctype,
+				filters={"parent": item_code, "parenttype": "Item"},
+				fields=[item_field],
+				pluck=item_field,
+			)
+		except Exception:
+			return 0
+
+		total = 0
+		for pkg_item in packing_items:
+			if not pkg_item:
+				continue
+			sold_qty = self._get_item_sales_qty_last_month(pkg_item)
+			filling_capacity = flt(frappe.db.get_value("Item", pkg_item, "custom_filling_capacity"))
+			total += filling_capacity * sold_qty
+		return total
 
 	def _get_item_stock_in_warehouse(self, item_code, warehouse):
 		"""Return actual_qty for item in a specific warehouse."""

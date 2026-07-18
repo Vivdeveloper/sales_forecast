@@ -203,8 +203,24 @@ frappe.ui.form.on("Forecast Club", {
 		// Re-fetch items for the newly selected plant (items are filtered by
 		// the item's Manufacturing Location matching the plant's FG warehouse)
 		fetch_sales_forecasts_if_dates_set(frm);
+		set_warehouse_for_plant(frm);
 	}
 });
+
+// Set Warehouse follows the selected Plant.
+// NOTE: "Plant 2 WIP RM  - PTPL" has a double space before the dash — that is the real
+// warehouse name; do not "fix" it.
+const PLANT_SET_WAREHOUSE = {
+	"Plant 1": "Plant 1 WIP FG - PTPL",
+	"Plant 2": "Plant 2 WIP RM  - PTPL",
+};
+
+function set_warehouse_for_plant(frm) {
+	const warehouse = PLANT_SET_WAREHOUSE[frm.doc.plant];
+	if (warehouse) {
+		frm.set_value("set_warehouse", warehouse);
+	}
+}
 
 function validate_week_and_batch_fields(frm) {
 	// Allow save even when w1_batch, w2_batch, w3_batch, w4_batch are 0.
