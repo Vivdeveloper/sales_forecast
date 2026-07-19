@@ -7,6 +7,7 @@ frappe.ui.form.on("Forecast Sales Person", {
 		setup_date_filters(frm);
 		setup_item_customer_filters(frm);
 		show_sales_person_info(frm);
+		apply_week_locks(frm);
 	},
 
 	posting_date(frm) {
@@ -15,6 +16,7 @@ frappe.ui.form.on("Forecast Sales Person", {
 			setup_date_filters(frm);
 			auto_set_forecast_dates(frm);
 		}
+		apply_week_locks(frm);
 	},
 
 	sales_person(frm) {
@@ -40,8 +42,40 @@ frappe.ui.form.on("Forecast Sales Person", {
 frappe.ui.form.on("Forecast Sales Person Wise Item", {
 	items_add(frm) {
 		setup_item_customer_filters(frm);
+		apply_week_locks(frm);
 	}
 });
+
+// Lock (make read-only) the week columns that have already elapsed, based on the
+// day-of-month of the Posting Date. Week boundaries within the month:
+//   Week 1 -> days 1-7, Week 2 -> 8-14, Week 3 -> 15-21, Week 4 -> 22+
+// Any week BEFORE the current week is locked; the current and future weeks stay editable.
+// e.g. posting on the 18th (Week 3) locks Week 1 & Week 2; posting on the 6th (Week 1) locks nothing.
+function get_current_week_of_month(day) {
+	if (day <= 7) return 1;
+	if (day <= 14) return 2;
+	if (day <= 21) return 3;
+	return 4;
+}
+
+function apply_week_locks(frm) {
+	const grid = frm.fields_dict.items && frm.fields_dict.items.grid;
+	if (!grid) return;
+
+	let current_week = 1;
+	if (frm.doc.posting_date) {
+		const day = frappe.datetime.str_to_obj(frm.doc.posting_date).getDate();
+		current_week = get_current_week_of_month(day);
+	}
+
+	[1, 2, 3, 4].forEach((week) => {
+		// Weeks strictly before the current week are locked (read-only).
+		const locked = week < current_week ? 1 : 0;
+		grid.update_docfield_property(`week_${week}`, "read_only", locked);
+	});
+
+	grid.refresh();
+}
 
 function validate_posting_date(frm) {
 	let posting_date = frappe.datetime.str_to_obj(frm.doc.posting_date);
