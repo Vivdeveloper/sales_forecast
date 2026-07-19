@@ -133,7 +133,9 @@ frappe.ui.form.on("Forecast Club", {
 	},
 
 	set_warehouse(frm) {
-		// Auto-refresh stock when set_warehouse is changed
+		// Auto-refresh stock when set_warehouse is changed by the user.
+		// Skipped for programmatic changes (plant -> warehouse); that flow refreshes itself.
+		if (_suspend_warehouse_refresh) return;
 		if (frm.doc.material_request_items && frm.doc.material_request_items.length > 0) {
 			refresh_stock_quantities(frm);
 		}
@@ -141,13 +143,14 @@ frappe.ui.form.on("Forecast Club", {
 
 	set_warehouse_2(frm) {
 		// Auto-refresh stock when set_warehouse_2 is changed
+		if (_suspend_warehouse_refresh) return;
 		if (frm.doc.material_request_items && frm.doc.material_request_items.length > 0) {
 			refresh_stock_quantities(frm);
 		}
 	},
 
 	get_fetch_material_request_item(frm) {
-		frm.call({
+		queue_doc_call(() => frm.call({
 			method: 'fetch_material_request_items',
 			doc: frm.doc,
 			freeze: true,
@@ -184,7 +187,7 @@ frappe.ui.form.on("Forecast Club", {
 					// }
 				}
 			}
-		});
+		}));
 	},
 
 	forecast_start_date(frm) {
@@ -201,11 +204,24 @@ frappe.ui.form.on("Forecast Club", {
 
 	plant(frm) {
 		// Re-fetch items for the newly selected plant (items are filtered by
-		// the item's Manufacturing Location matching the plant's FG warehouse)
+		// the item's Manufacturing Location matching the plant's FG warehouse).
+		// The warehouse is set *after* the fetch response lands -- see queue_doc_call().
 		fetch_sales_forecasts_if_dates_set(frm);
-		set_warehouse_for_plant(frm);
+		queue_doc_call(() => set_warehouse_for_plant(frm));
 	}
 });
+
+// Every frm.call({doc: frm.doc}) posts the whole client doc and its response re-syncs
+// the whole doc back (frappe.model.sync on response.docs). Two of them in flight at once
+// means the slower response overwrites whatever the faster one produced -- that is why
+// freshly fetched items disappeared and set_warehouse reverted. Keep them strictly
+// sequential, and queue local doc edits that must survive a sync onto the same chain.
+let _doc_call_chain = Promise.resolve();
+
+function queue_doc_call(fn) {
+	_doc_call_chain = _doc_call_chain.then(fn).catch(() => {});
+	return _doc_call_chain;
+}
 
 // Set Warehouse follows the selected Plant.
 // NOTE: "Plant 2 WIP RM  - PTPL" has a double space before the dash — that is the real
@@ -215,10 +231,46 @@ const PLANT_SET_WAREHOUSE = {
 	"Plant 2": "Plant 2 WIP RM  - PTPL",
 };
 
-function set_warehouse_for_plant(frm) {
-	const warehouse = PLANT_SET_WAREHOUSE[frm.doc.plant];
-	if (warehouse) {
-		frm.set_value("set_warehouse", warehouse);
+// Set warehouse is a Link -- a name that does not exist is rejected and the field is left
+// blank. Because of the irregular spacing above, fall back to a whitespace-tolerant match
+// rather than silently leaving the field empty.
+async function resolve_warehouse(name) {
+	if (await frappe.db.exists("Warehouse", name)) return name;
+	const rows = await frappe.db.get_list("Warehouse", {
+		filters: [["name", "like", name.replace(/\s+/g, "%")]],
+		fields: ["name"],
+		limit: 1
+	});
+	return rows && rows.length ? rows[0].name : null;
+}
+
+let _suspend_warehouse_refresh = false;
+
+async function set_warehouse_for_plant(frm) {
+	const preferred = PLANT_SET_WAREHOUSE[frm.doc.plant];
+	if (!preferred) return;
+
+	const warehouse = await resolve_warehouse(preferred);
+	if (!warehouse) {
+		frappe.show_alert({
+			message: __("No Set Warehouse found for {0} ({1})", [frm.doc.plant, preferred]),
+			indicator: "orange"
+		});
+		return;
+	}
+	if (frm.doc.set_warehouse === warehouse) return;
+
+	_suspend_warehouse_refresh = true;
+	try {
+		await frm.set_value("set_warehouse", warehouse);
+	} finally {
+		_suspend_warehouse_refresh = false;
+	}
+
+	// The refresh the set_warehouse handler would normally do. Called unqueued because we
+	// are already running inside the queue -- re-queueing here would wait on ourselves.
+	if (frm.doc.material_request_items && frm.doc.material_request_items.length > 0) {
+		await do_refresh_stock_quantities(frm);
 	}
 }
 
@@ -268,7 +320,7 @@ function warn_zero_capacity_or_batch_qty(frm) {
 function fetch_sales_forecasts_if_dates_set(frm) {
 	// Only fetch if all required fields are set (plant drives item filtering)
 	if (frm.doc.forecast_start_date && frm.doc.forecast_end_date && frm.doc.company && frm.doc.plant) {
-		frm.call({
+		return queue_doc_call(() => frm.call({
 			method: 'fetch_sales_forecasts',
 			doc: frm.doc,
 			freeze: true,
@@ -284,8 +336,9 @@ function fetch_sales_forecasts_if_dates_set(frm) {
 					});
 				}
 			}
-		});
+		}));
 	}
+	return Promise.resolve();
 }
 
 frappe.ui.form.on("Forecast Club Item", {
@@ -754,8 +807,12 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 }
 
 function refresh_stock_quantities(frm) {
+	return queue_doc_call(() => do_refresh_stock_quantities(frm));
+}
+
+function do_refresh_stock_quantities(frm) {
 	// Re-fetch material request items to update stock quantities
-	frm.call({
+	return frm.call({
 		method: 'fetch_material_request_items',
 		doc: frm.doc,
 		freeze: true,
