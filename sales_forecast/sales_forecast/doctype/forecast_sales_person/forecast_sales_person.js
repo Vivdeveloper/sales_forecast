@@ -5,6 +5,7 @@ frappe.ui.form.on("Forecast Sales Person", {
 	refresh(frm) {
 		// Set up date filters when form loads
 		setup_date_filters(frm);
+		setup_item_group_filter(frm);
 		setup_item_customer_filters(frm);
 		show_sales_person_info(frm);
 		apply_week_locks(frm);
@@ -41,10 +42,23 @@ frappe.ui.form.on("Forecast Sales Person", {
 
 frappe.ui.form.on("Forecast Sales Person Wise Item", {
 	items_add(frm) {
+		setup_item_group_filter(frm);
 		setup_item_customer_filters(frm);
 		apply_week_locks(frm);
 	}
 });
+
+// Restrict the Item Code picker in the Items table to Finished Goods (and its
+// child item groups), so raw materials/packing material etc. don't show up.
+function setup_item_group_filter(frm) {
+	frm.set_query('item_code', 'items', function() {
+		return {
+			filters: [
+				['Item', 'item_group', 'descendants of (inclusive)', 'Finished Goods']
+			]
+		};
+	});
+}
 
 // Lock (make read-only) the week columns that have already elapsed, based on the
 // day-of-month of the Posting Date. Week boundaries within the month:
