@@ -210,14 +210,14 @@
    "read_only": 1
   },
   {
-   "description": "Last calendar month's sales, converted to loose units. Sales happen on this item's Packing Material Details (the sellable SKUs), not the FG item itself: for each packing material, qty sold via submitted Sales Invoices (this Company) in the previous calendar month is multiplied by that packing material's Filling Capacity, then summed across all packing materials.",
+   "description": "Last calendar month's sales, converted to loose units.",
    "fieldname": "last_month_sales",
    "fieldtype": "Float",
    "label": "Last Month Sales",
    "read_only": 1
   },
   {
-   "description": "Item's current stock in this Forecast Club's Company only — sum of Bin actual_qty across all warehouses belonging to that Company.",
+   "description": "Current stock across all warehouse",
    "fieldname": "current_stock",
    "fieldtype": "Float",
    "label": "Current Stock",
@@ -231,14 +231,14 @@
    "read_only": 1
   },
   {
-   "description": "Total planned production quantity, same as Total Qty: sum of W1–W4 Batch Qty, where each week's Batch Qty = Batch Size × the Batch Capacity of that week's selected Blender (Workstation).",
+   "description": " Planned Quantity - Sum of all batch quantity",
    "fieldname": "planned_quantity",
    "fieldtype": "Float",
    "label": "Planned Quantity",
    "read_only": 1
   },
   {
-   "description": "Loose + Packing quantity, across ALL companies (not just this Forecast Club's Company). Loose = this item's own stock summed across every warehouse of every company. Packing = for each item in this item's Packing Material Details, that packing material's Filling Capacity × its stock across all companies, summed together.",
+   "description": "FG Company Stock -Loose stock +Packaging stock",
    "fieldname": "custom_company_stock",
    "fieldtype": "Data",
    "label": "FG Company Stock",

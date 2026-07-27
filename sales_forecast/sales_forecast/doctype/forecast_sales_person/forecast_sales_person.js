@@ -60,26 +60,45 @@ function setup_item_group_filter(frm) {
 	});
 }
 
-// Lock (make read-only) the week columns that have already elapsed, based on the
-// day-of-month of the Posting Date. Week boundaries within the month:
+// Week boundaries within the forecast month:
 //   Week 1 -> days 1-7, Week 2 -> 8-14, Week 3 -> 15-21, Week 4 -> 22+
-// Any week BEFORE the current week is locked; the current and future weeks stay editable.
-// e.g. posting on the 18th (Week 3) locks Week 1 & Week 2; posting on the 6th (Week 1) locks nothing.
-function get_current_week_of_month(day) {
+function get_week_of_month(day) {
 	if (day <= 7) return 1;
 	if (day <= 14) return 2;
 	if (day <= 21) return 3;
 	return 4;
 }
 
+// Months as a single comparable number, so "is this month before that one" is one check.
+function month_index(year, month) {
+	return year * 12 + month;
+}
+
+function get_today_parts() {
+	const today = frappe.datetime.str_to_obj(frappe.datetime.get_today());
+	return { year: today.getFullYear(), month: today.getMonth(), day: today.getDate() };
+}
+
+// Lock (make read-only) the week columns of the FORECAST month that have already
+// elapsed as of today -- that is what blocks backdated entry. The weeks belong to the
+// forecast month, not to the posting date's own month, so a forecast for a future month
+// keeps all four weeks editable even when the posting date itself falls in week 4.
+// e.g. posting on 27-Jul forecasts August and locks nothing; a backdated forecast for
+// July viewed on 27-Jul locks Weeks 1-3 and leaves the running Week 4 editable.
 function apply_week_locks(frm) {
 	const grid = frm.fields_dict.items && frm.fields_dict.items.grid;
 	if (!grid) return;
 
 	let current_week = 1;
 	if (frm.doc.posting_date) {
-		const day = frappe.datetime.str_to_obj(frm.doc.posting_date).getDate();
-		current_week = get_current_week_of_month(day);
+		const forecast_month = get_forecast_month(frm.doc.posting_date);
+		const today = get_today_parts();
+		// get_forecast_month() never returns a fully elapsed month, so the forecast month
+		// is either the current one (weeks before today's week are locked) or a future one
+		// (nothing locked).
+		if (month_index(forecast_month.year, forecast_month.month) === month_index(today.year, today.month)) {
+			current_week = get_week_of_month(today.day);
+		}
 	}
 
 	[1, 2, 3, 4].forEach((week) => {
@@ -129,6 +148,15 @@ function get_forecast_month(posting_date) {
 		}
 	}
 
+	// A backdated posting date lands on a month whose weeks have all elapsed, which would
+	// leave every week column read-only. Roll forward to the first month that still has an
+	// editable week -- the current month always does, since today's own week is open.
+	const today = get_today_parts();
+	if (month_index(year, month) < month_index(today.year, today.month)) {
+		year = today.year;
+		month = today.month;
+	}
+
 	return {
 		year: year,
 		month: month
@@ -174,15 +202,17 @@ function setup_date_filters(frm) {
 		};
 	});
 
-	// Set date picker options for forecast dates
-	frm.fields_dict['forecast_start_date'].datepicker.update({
-		minDate: start_date,
-		maxDate: end_date
-	});
-
-	frm.fields_dict['forecast_end_date'].datepicker.update({
-		minDate: start_date,
-		maxDate: end_date
+	// Set date picker options for forecast dates. The datepicker only exists once the
+	// control has been rendered, so guard it -- refresh() runs this before apply_week_locks()
+	// and a throw here would leave the week columns unlocked.
+	['forecast_start_date', 'forecast_end_date'].forEach((fieldname) => {
+		const field = frm.fields_dict[fieldname];
+		if (field && field.datepicker) {
+			field.datepicker.update({
+				minDate: start_date,
+				maxDate: end_date
+			});
+		}
 	});
 }
 
