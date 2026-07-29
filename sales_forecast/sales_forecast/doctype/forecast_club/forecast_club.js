@@ -73,8 +73,8 @@ frappe.ui.form.on("Forecast Club", {
 		// Items: only show items belonging to the selected Plant
 		// (Item.custom_manufacturing_location == plant's FG warehouse)
 		const PLANT_WAREHOUSE = {
-			"Plant 1": "Plant 1 FG - PTPL",
-			"Plant 2": "Plant 2 FG - PTPL"
+			"Plant 1": "Plant 1 WIP FG - PTPL",
+			"Plant 2": "Plant 2 WIP FG - PTPL"
 		};
 		frm.set_query("item_code", "items", function () {
 			const warehouse = PLANT_WAREHOUSE[frm.doc.plant];

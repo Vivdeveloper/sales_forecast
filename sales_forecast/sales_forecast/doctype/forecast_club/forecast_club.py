@@ -26,8 +26,8 @@ FG_COMPANY_STOCK_WAREHOUSES = [
 # Plant selection maps to the item's Manufacturing Location (Item.custom_manufacturing_location).
 # Only items whose manufacturing location matches the selected plant's warehouse belong to that plant.
 PLANT_WAREHOUSE = {
-	"Plant 1": "Plant 1 FG - PTPL",
-	"Plant 2": "Plant 2 FG - PTPL",
+	"Plant 1": "Plant 1 WIP FG - PTPL",
+	"Plant 2": "Plant 2 WIP FG - PTPL",
 }
 
 

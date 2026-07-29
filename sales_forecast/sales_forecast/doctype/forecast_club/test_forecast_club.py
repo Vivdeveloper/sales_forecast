@@ -4,8 +4,8 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-PLANT_1_WAREHOUSE = "Plant 1 FG - PTPL"
-PLANT_2_WAREHOUSE = "Plant 2 FG - PTPL"
+PLANT_1_WAREHOUSE = "Plant 1 WIP FG - PTPL"
+PLANT_2_WAREHOUSE = "Plant 2 WIP FG - PTPL"
 
 
 def _make_item(item_code, manufacturing_location):
