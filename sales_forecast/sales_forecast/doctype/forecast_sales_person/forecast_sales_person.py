@@ -12,6 +12,22 @@ class ForecastSalesPerson(Document):
 		self.validate_duplicate_date_range()
 		self.validate_items()
 
+	def before_insert(self):
+		self.enforce_sales_person_for_current_user()
+
+	def enforce_sales_person_for_current_user(self):
+		"""A logged-in Sales Person (no System Manager/Sales Manager role) can only
+		create forecasts against their own linked Sales Person record. The client
+		script pre-fills and locks the field, but this is the server-side backstop
+		in case the request bypasses the form (API, data import, etc.).
+		"""
+		if "System Manager" in frappe.get_roles() or "Sales Manager" in frappe.get_roles():
+			return
+
+		own_sales_person = get_current_user_sales_person()
+		if own_sales_person and self.sales_person != own_sales_person:
+			frappe.throw(_("You can only create a forecast for your own Sales Person record"))
+
 	def validate_dates(self):
 		"""Validate forecast start and end dates"""
 		from frappe.utils import getdate
@@ -113,3 +129,12 @@ class ForecastSalesPerson(Document):
 						)
 					)
 				seen_items[item.item_code] = idx
+
+
+@frappe.whitelist()
+def get_current_user_sales_person():
+	"""Return the Sales Person linked (via Employee.user_id) to the logged-in user, if any."""
+	employee = frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name")
+	if not employee:
+		return None
+	return frappe.db.get_value("Sales Person", {"employee": employee}, "name")

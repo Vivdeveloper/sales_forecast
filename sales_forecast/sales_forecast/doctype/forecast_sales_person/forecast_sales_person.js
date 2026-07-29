@@ -9,6 +9,7 @@ frappe.ui.form.on("Forecast Sales Person", {
 		setup_item_customer_filters(frm);
 		show_sales_person_info(frm);
 		apply_week_locks(frm);
+		lock_sales_person_for_current_user(frm);
 	},
 
 	posting_date(frm) {
@@ -300,6 +301,31 @@ function setup_item_customer_filters(frm) {
 
 				// Refresh the child table fields
 				frm.refresh_field('items');
+			}
+		}
+	});
+}
+
+// A Sales Manager/System Manager may create a forecast for any Sales Person, so the
+// field stays open and empty for them. Anyone else (a Sales Person logging in themselves)
+// only ever forecasts on their own behalf, so their own name is filled in and locked.
+function lock_sales_person_for_current_user(frm) {
+	if (frappe.user_roles.includes('Sales Manager')) {
+		return;
+	}
+
+	frappe.call({
+		method: 'sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person.get_current_user_sales_person',
+		callback: function(r) {
+			const own_sales_person = r.message;
+			if (!own_sales_person) return;
+
+			if (frm.is_new() && !frm.doc.sales_person) {
+				frm.set_value('sales_person', own_sales_person);
+			}
+
+			if (frm.doc.sales_person === own_sales_person) {
+				frm.set_df_property('sales_person', 'read_only', 1);
 			}
 		}
 	});

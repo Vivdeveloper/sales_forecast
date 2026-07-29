@@ -12,6 +12,17 @@ FG_WAREHOUSE_STOCK_FIELDS = {
 	"custom_mainstore_fg": "Main Store FG - PTPL",
 }
 
+# Current Stock WIP: only these two WIP FG warehouses count, not all warehouses.
+CURRENT_STOCK_WAREHOUSES = ["Plant 1 WIP FG - PTPL", "Plant 2 WIP FG - PTPL"]
+
+# FG Company Stock's loose-stock component: only these warehouses count, not all warehouses/companies.
+FG_COMPANY_STOCK_WAREHOUSES = [
+	"Plant 1 WIP FG - PTPL",
+	"Plant 2 WIP FG - PTPL",
+	"Main Store FG - PTPL",
+	"FG Pune Warehouse  - PTPL",
+]
+
 # Plant selection maps to the item's Manufacturing Location (Item.custom_manufacturing_location).
 # Only items whose manufacturing location matches the selected plant's warehouse belong to that plant.
 PLANT_WAREHOUSE = {
@@ -69,18 +80,19 @@ class ForecastClub(Document):
 			if hasattr(item, "planned_quantity"):
 				item.planned_quantity = flt(item.total_qty)
 
-			# Current Stock: item's current stock in the selected company (all its warehouses)
+			# Current Stock WIP: item's stock in Plant 1 WIP FG + Plant 2 WIP FG warehouses only
 			if item.item_code and hasattr(item, "current_stock"):
-				item.current_stock = self._get_item_stock_in_company(item.item_code, self.company)
+				item.current_stock = self._get_item_stock_in_warehouses(item.item_code, CURRENT_STOCK_WAREHOUSES)
 
 			# Last Month Sales: qty sold via submitted Sales Invoices in the previous calendar month
 			if item.item_code and hasattr(item, "last_month_sales"):
 				item.last_month_sales = self._get_last_month_sales(item.item_code)
 
-			# Set custom_company_stock: total FG stock across all companies + packing material loose qty
+			# Set custom_company_stock: FG loose stock in Plant 1 WIP FG, Plant 2 WIP FG,
+			# Main Store FG, FG Pune Warehouse + packing material loose qty
 			if item.item_code and hasattr(item, "custom_company_stock"):
 				item.custom_company_stock = (
-					self._get_item_stock_in_all_companies(item.item_code)
+					self._get_item_stock_in_warehouses(item.item_code, FG_COMPANY_STOCK_WAREHOUSES)
 					+ self._get_total_packing_loose_qty(item.item_code)
 				)
 
@@ -187,6 +199,17 @@ class ForecastClub(Document):
 		)
 		return flt(qty)
 
+	def _get_item_stock_in_warehouses(self, item_code, warehouses):
+		"""Return total actual_qty for item summed across a specific list of warehouses."""
+		if not item_code or not warehouses:
+			return 0
+		result = frappe.db.sql("""
+			SELECT COALESCE(SUM(actual_qty), 0)
+			FROM `tabBin`
+			WHERE item_code = %s AND warehouse IN %s
+		""", (item_code, tuple(warehouses)))
+		return flt(result[0][0]) if result else 0
+
 	def _get_total_packing_loose_qty(self, item_code, company=None):
 		"""Sum of loose qty (Filling Capacity * stock) across all packing materials of the item.
 		If company is given, use that company's stock; otherwise use stock across all companies."""
@@ -275,13 +298,13 @@ class ForecastClub(Document):
 		doc = frappe.new_doc("Forecast Club")
 		# _get_last_month_sales reads self.company, so the throwaway doc has to carry it.
 		doc.company = company
-		stock = doc._get_item_stock_in_all_companies(item_code) + doc._get_total_packing_loose_qty(item_code)
+		stock = doc._get_item_stock_in_warehouses(item_code, FG_COMPANY_STOCK_WAREHOUSES) + doc._get_total_packing_loose_qty(item_code)
 		packaging = doc._get_item_packaging_materials(item_code, company=company)
 		result = {
 			"custom_company_stock": stock,
 			"custom_item_packaging_material": packaging,
 			# Same helpers before_save uses, so the pre-save preview matches what gets stored.
-			"current_stock": doc._get_item_stock_in_company(item_code, company),
+			"current_stock": doc._get_item_stock_in_warehouses(item_code, CURRENT_STOCK_WAREHOUSES),
 			"last_month_sales": doc._get_last_month_sales(item_code),
 		}
 		for fieldname, warehouse in FG_WAREHOUSE_STOCK_FIELDS.items():
@@ -440,6 +463,9 @@ class ForecastClub(Document):
 
 		items_without_bom = []
 		for item in self.items:
+			if not item.item_code:
+				continue
+
 			if not item.bom:
 				items_without_bom.append(item.item_code)
 				continue

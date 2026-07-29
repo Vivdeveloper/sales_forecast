@@ -9,10 +9,10 @@
   "item_code",
   "item_name",
   "item_manufacturing_remark",
-  "column_break_item",
   "total_batch_qty",
   "total_qty",
   "last_month_sales",
+  "column_break_item",
   "current_stock",
   "forecast_quantity",
   "planned_quantity",
@@ -217,10 +217,10 @@
    "read_only": 1
   },
   {
-   "description": "Current stock across all warehouse",
+   "description": "Current stock (loose qty) in Plant 1 WIP FG and Plant 2 WIP FG warehouses only",
    "fieldname": "current_stock",
    "fieldtype": "Float",
-   "label": "Current Stock",
+   "label": "Current Stock WIP",
    "read_only": 1
   },
   {
@@ -238,7 +238,7 @@
    "read_only": 1
   },
   {
-   "description": "FG Company Stock -Loose stock +Packaging stock",
+   "description": "FG Company Stock -Loose stock (Plant 1 WIP FG + Plant 2 WIP FG + Main Store FG + FG Pune Warehouse) +Packaging stock",
    "fieldname": "custom_company_stock",
    "fieldtype": "Data",
    "label": "FG Company Stock",
