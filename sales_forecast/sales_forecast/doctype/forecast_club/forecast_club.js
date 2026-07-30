@@ -688,6 +688,13 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 					},
 					{
 						fieldtype: 'Int',
+						fieldname: 'batches_to_create',
+						label: __('No. of Batches to Create'),
+						in_list_view: 1,
+						columns: 1
+					},
+					{
+						fieldtype: 'Int',
 						fieldname: 'total_batches',
 						label: __('Total Batches'),
 						in_list_view: 1,
@@ -708,13 +715,6 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 						label: __('Remaining'),
 						in_list_view: 1,
 						read_only: 1,
-						columns: 1
-					},
-					{
-						fieldtype: 'Int',
-						fieldname: 'batches_to_create',
-						label: __('Batches to Create'),
-						in_list_view: 1,
 						columns: 1
 					},
 					{

@@ -133,8 +133,5 @@ class ForecastSalesPerson(Document):
 
 @frappe.whitelist()
 def get_current_user_sales_person():
-	"""Return the Sales Person linked (via Employee.user_id) to the logged-in user, if any."""
-	employee = frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name")
-	if not employee:
-		return None
-	return frappe.db.get_value("Sales Person", {"employee": employee}, "name")
+	"""Return the Sales Person linked (via Sales Person.custom_user) to the logged-in user, if any."""
+	return frappe.db.get_value("Sales Person", {"custom_user": frappe.session.user}, "name")
