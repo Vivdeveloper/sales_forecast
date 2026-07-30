@@ -1,0 +1,29 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-07-30 10:38:23.121440",
+  "name": "Forecast Planned",
+  "style": "Warning",
+  "workflow_state_name": "Forecast Planned"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-07-30 10:38:23.282505",
+  "name": "Production Plan Pending",
+  "style": "Warning",
+  "workflow_state_name": "Production Plan Pending"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-07-30 10:38:23.283986",
+  "name": "Production Plan Completed",
+  "style": "Success",
+  "workflow_state_name": "Production Plan Completed"
+ }
+]

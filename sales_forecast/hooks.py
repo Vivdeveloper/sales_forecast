@@ -134,6 +134,24 @@ app_license = "mit"
 # 	"ToDo": "custom_app.overrides.CustomToDo"
 # }
 
+# Fixtures
+# ---------------
+# Records exported with the app so the Forecast Club workflow ships with a fresh install
+
+fixtures = [
+	{"dt": "Workflow", "filters": [["name", "=", "Forecast Club Workflow"]]},
+	{
+		"dt": "Workflow State",
+		"filters": [
+			["name", "in", ["Forecast Planned", "Production Plan Pending", "Production Plan Completed"]]
+		],
+	},
+	{
+		"dt": "Workflow Action Master",
+		"filters": [["name", "in", ["Send for Production", "Complete & Submit"]]],
+	},
+]
+
 # Document Events
 # ---------------
 # Hook on document methods and events
