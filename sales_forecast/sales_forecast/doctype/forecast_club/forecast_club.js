@@ -71,13 +71,17 @@ frappe.ui.form.on("Forecast Club", {
 		frm.set_query("bom", "items", bom_get_query);
 
 		// Items: only show items belonging to the selected Plant
-		// (Item.custom_manufacturing_location == plant's FG warehouse)
-		const PLANT_WAREHOUSE = {
-			"Plant 1": "Plant 1 WIP FG - PTPL",
-			"Plant 2": "Plant 2 WIP FG - PTPL"
-		};
+		// (Item.custom_manufacturing_location == Plant Warehouse's WIP FG warehouse)
+		// Plant Warehouse only has 2 rows, so refetch it on every refresh and cache
+		// on frm -- the item_code query filter below reads the cache synchronously.
+		frappe.db.get_list("Plant Warehouse", { fields: ["name", "wip_fg_warehouse"], limit_page_length: 0 })
+			.then(function (rows) {
+				const map = {};
+				rows.forEach(function (r) { map[r.name] = r.wip_fg_warehouse; });
+				frm._plant_warehouse_map = map;
+			});
 		frm.set_query("item_code", "items", function () {
-			const warehouse = PLANT_WAREHOUSE[frm.doc.plant];
+			const warehouse = (frm._plant_warehouse_map || {})[frm.doc.plant];
 			if (!warehouse) {
 				return {};
 			}

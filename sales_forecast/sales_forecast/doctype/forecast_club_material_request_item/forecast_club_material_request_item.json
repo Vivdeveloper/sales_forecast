@@ -37,7 +37,7 @@
    "fieldname": "actual_qty",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Actual Qty",
+   "label": "WIP - RM",
    "read_only": 1
   },
   {
@@ -76,7 +76,8 @@
    "columns": 1,
    "fieldname": "actual_qty_2",
    "fieldtype": "Float",
-   "in_list_view": 1,
+   "hidden": 1,
+   "in_list_view": 0,
    "label": "Actual Qty 2",
    "read_only": 1
   }

@@ -106,8 +106,8 @@
    "fieldname": "material_request_items",
    "fieldtype": "Table",
    "label": "Material Request Items",
-   "options": "Forecast Club Material Request Item",
-   "reqd": 1
+   "mandatory_depends_on": "eval:doc.workflow_state && doc.workflow_state != \"Forecast Planned\"",
+   "options": "Forecast Club Material Request Item"
   },
   {
    "fieldname": "section_break_mubc",
@@ -135,10 +135,10 @@
   },
   {
    "fieldname": "plant",
-   "fieldtype": "Select",
+   "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Plant",
-   "options": "\nPlant 1\nPlant 2",
+   "options": "Plant Warehouse",
    "reqd": 1
   },
   {
@@ -168,6 +168,7 @@
   {
    "fieldname": "set_warehouse_2",
    "fieldtype": "Link",
+   "hidden": 1,
    "label": "Set Warehouse 2",
    "options": "Warehouse"
   }
@@ -203,6 +204,17 @@
    "role": "System Manager",
    "share": 1,
    "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "All",
+   "share": 1,
    "write": 1
   },
   {

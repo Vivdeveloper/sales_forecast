@@ -23,12 +23,15 @@ FG_COMPANY_STOCK_WAREHOUSES = [
 	"FG Pune Warehouse  - PTPL",
 ]
 
-# Plant selection maps to the item's Manufacturing Location (Item.custom_manufacturing_location).
-# Only items whose manufacturing location matches the selected plant's warehouse belong to that plant.
-PLANT_WAREHOUSE = {
-	"Plant 1": "Plant 1 WIP FG - PTPL",
-	"Plant 2": "Plant 2 WIP FG - PTPL",
-}
+def get_plant_warehouse(plant):
+	"""Plant's WIP FG warehouse, looked up from the Plant Warehouse master.
+
+	Item.custom_manufacturing_location must equal this warehouse for an item to
+	belong to the plant.
+	"""
+	if not plant:
+		return None
+	return frappe.db.get_value("Plant Warehouse", plant, "wip_fg_warehouse")
 
 
 class ForecastClub(Document):
@@ -343,15 +346,14 @@ class ForecastClub(Document):
 		"""Every item must belong to the selected Plant.
 
 		An item belongs to a plant when its Manufacturing Location
-		(Item.custom_manufacturing_location) is that plant's FG warehouse.
-		Two plants are supported: Plant 1 -> "Plant 1 FG - PTPL", Plant 2 -> "Plant 2 FG - PTPL".
+		(Item.custom_manufacturing_location) is that Plant Warehouse's WIP FG warehouse.
 		"""
 		from frappe import _
 
 		if not self.plant or not self.items:
 			return
 
-		plant_warehouse = PLANT_WAREHOUSE.get(self.plant)
+		plant_warehouse = get_plant_warehouse(self.plant)
 		if not plant_warehouse:
 			return
 
@@ -636,7 +638,7 @@ class ForecastClub(Document):
 				items_dict[key]["week_4"] += (item.week_4 or 0)
 
 		# Restrict to the selected plant's items (Item.custom_manufacturing_location == plant warehouse)
-		plant_warehouse = PLANT_WAREHOUSE.get(self.plant) if self.plant else None
+		plant_warehouse = get_plant_warehouse(self.plant)
 
 		# Add aggregated items to the items child table
 		for item_data in items_dict.values():
