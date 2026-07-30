@@ -10,13 +10,14 @@
   "item_name",
   "item_manufacturing_remark",
   "total_batch_qty",
-  "total_qty",
-  "last_month_sales",
   "column_break_item",
   "current_stock",
   "forecast_quantity",
-  "planned_quantity",
+  "total_qty",
+  "column_break_gqcu",
   "bom",
+  "last_month_sales",
+  "planned_quantity",
   "column_break_pspq",
   "week_1",
   "blender_week_1",
@@ -378,13 +379,17 @@
   {
    "fieldname": "column_break_euab",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_gqcu",
+   "fieldtype": "Column Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-06-27 17:01:24.757213",
+ "modified": "2026-07-30 14:38:36.428965",
  "modified_by": "Administrator",
  "module": "Sales Forecast",
  "name": "Forecast Club Item",
