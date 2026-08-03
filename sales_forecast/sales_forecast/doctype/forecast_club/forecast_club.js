@@ -634,7 +634,7 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 			total_batches: batch_count,
 			wo_created: wo_created,
 			remaining_batches: remaining_batches,
-			batches_to_create: remaining_batches > 0 ? remaining_batches : 0,
+			batches_to_create: 0,
 			forecast_club_item: item.name
 		};
 	});
