@@ -57,6 +57,16 @@ class ForecastClub(Document):
 			if flt(item.batch_capacity_4):
 				item.w4_batch_qty = (item.w4_batch or 0) * flt(item.batch_capacity_4)
 
+			# Plan Qty is reduce-only per week: default to the week's batch qty, and
+			# clamp to [0, batch_qty] (also enforced server-side for API/import safety).
+			for wk in ("w1", "w2", "w3", "w4"):
+				plan_field = f"{wk}_plan_qty"
+				batch_qty = flt(getattr(item, f"{wk}_batch_qty", 0))
+				plan = flt(getattr(item, plan_field, 0) or 0)
+				if plan <= 0 or plan > batch_qty:
+					plan = batch_qty  # default / cap to batch qty
+				setattr(item, plan_field, plan)
+
 			# Calculate total_batch_qty as sum of all weekly batches
 			item.total_batch_qty = (
 				(item.w1_batch or 0) +

@@ -24,6 +24,7 @@
   "batch_capacity_1",
   "w1_batch",
   "w1_batch_qty",
+  "w1_plan_qty",
   "w1_wo",
   "column_break_ohyy",
   "week_2",
@@ -31,6 +32,7 @@
   "batch_capacity_2",
   "w2_batch",
   "w2_batch_qty",
+  "w2_plan_qty",
   "w2_wo",
   "column_break_cbkq",
   "week_3",
@@ -38,6 +40,7 @@
   "batch_capacity_3",
   "w3_batch",
   "w3_batch_qty",
+  "w3_plan_qty",
   "w3_wo",
   "column_break_jgmb",
   "week_4",
@@ -45,6 +48,7 @@
   "batch_capacity_4",
   "w4_batch",
   "w4_batch_qty",
+  "w4_plan_qty",
   "w4_wo",
   "stocks_section",
   "custom_plant_1_fg_loose_qty",
@@ -291,11 +295,25 @@
    "read_only": 1
   },
   {
+   "fieldname": "w1_plan_qty",
+   "fieldtype": "Int",
+   "label": "W1 Plan Qty",
+   "non_negative": 1,
+   "description": "Defaults to the week's Batch Qty; can be reduced (not increased above it)."
+  },
+  {
    "fieldname": "w2_batch_qty",
    "fieldtype": "Float",
    "label": "W2 Batch Qty",
    "non_negative": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "w2_plan_qty",
+   "fieldtype": "Int",
+   "label": "W2 Plan Qty",
+   "non_negative": 1,
+   "description": "Defaults to the week's Batch Qty; can be reduced (not increased above it)."
   },
   {
    "fieldname": "w3_batch_qty",
@@ -305,11 +323,25 @@
    "read_only": 1
   },
   {
+   "fieldname": "w3_plan_qty",
+   "fieldtype": "Int",
+   "label": "W3 Plan Qty",
+   "non_negative": 1,
+   "description": "Defaults to the week's Batch Qty; can be reduced (not increased above it)."
+  },
+  {
    "fieldname": "w4_batch_qty",
    "fieldtype": "Float",
    "label": "W4 Batch Qty",
    "non_negative": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "w4_plan_qty",
+   "fieldtype": "Int",
+   "label": "W4 Plan Qty",
+   "non_negative": 1,
+   "description": "Defaults to the week's Batch Qty; can be reduced (not increased above it)."
   },
   {
    "fieldname": "blender_week_1",

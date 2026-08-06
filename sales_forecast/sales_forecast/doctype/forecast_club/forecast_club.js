@@ -346,6 +346,18 @@ function fetch_sales_forecasts_if_dates_set(frm) {
 }
 
 frappe.ui.form.on("Forecast Club Item", {
+	// When a row editor opens, default each week's Plan Qty to its Batch Qty if
+	// it is still unset (0). Per-row and non-intrusive — does not touch the whole grid.
+	form_render(frm, cdt, cdn) {
+		const row = locals[cdt][cdn];
+		if (!row) return;
+		["w1", "w2", "w3", "w4"].forEach((wk) => {
+			if (!flt(row[`${wk}_plan_qty`]) && flt(row[`${wk}_batch_qty`]) > 0) {
+				frappe.model.set_value(cdt, cdn, `${wk}_plan_qty`, flt(row[`${wk}_batch_qty`]));
+			}
+		});
+	},
+
 	item_code(frm, cdt, cdn) {
 		check_duplicate_item(frm, cdt, cdn);
 		fetch_item_stock_and_packaging(frm, cdt, cdn);
@@ -398,6 +410,12 @@ frappe.ui.form.on("Forecast Club Item", {
 	batch_capacity_2(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
 	batch_capacity_3(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
 	batch_capacity_4(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
+
+	// Plan Qty is reduce-only: it may not exceed that week's Batch Qty, nor go below 0.
+	w1_plan_qty(frm, cdt, cdn) { cap_plan_qty(frm, cdt, cdn, 'w1_plan_qty', 'w1_batch_qty', 'Week 1'); },
+	w2_plan_qty(frm, cdt, cdn) { cap_plan_qty(frm, cdt, cdn, 'w2_plan_qty', 'w2_batch_qty', 'Week 2'); },
+	w3_plan_qty(frm, cdt, cdn) { cap_plan_qty(frm, cdt, cdn, 'w3_plan_qty', 'w3_batch_qty', 'Week 3'); },
+	w4_plan_qty(frm, cdt, cdn) { cap_plan_qty(frm, cdt, cdn, 'w4_plan_qty', 'w4_batch_qty', 'Week 4'); },
 
 	// Blender selection fetches batch_capacity_N (fetch_from); recompute after the fetch settles
 	blender_week_1(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
@@ -517,6 +535,23 @@ function check_duplicate_item(frm, cdt, cdn) {
 	}
 }
 
+// Plan Qty is reduce-only: clamp to [0, that week's Batch Qty].
+function cap_plan_qty(frm, cdt, cdn, plan_field, batch_qty_field, week_label) {
+	let row = locals[cdt][cdn];
+	if (!row) return;
+	let plan = flt(row[plan_field]);
+	let max_qty = flt(row[batch_qty_field]);
+	if (plan > max_qty) {
+		frappe.model.set_value(cdt, cdn, plan_field, max_qty);
+		frappe.show_alert({
+			message: __("{0}: Plan Qty cannot exceed Batch Qty ({1}); reset to it.", [week_label, max_qty]),
+			indicator: "orange",
+		});
+	} else if (plan < 0) {
+		frappe.model.set_value(cdt, cdn, plan_field, 0);
+	}
+}
+
 function calculate_totals(frm, cdt, cdn) {
 	let row = locals[cdt][cdn];
 	if (!row) return;
@@ -531,6 +566,13 @@ function calculate_totals(frm, cdt, cdn) {
 	frappe.model.set_value(cdt, cdn, 'w2_batch_qty', q2);
 	frappe.model.set_value(cdt, cdn, 'w3_batch_qty', q3);
 	frappe.model.set_value(cdt, cdn, 'w4_batch_qty', q4);
+
+	// Plan Qty defaults to that week's batch qty (the max); the user may reduce it.
+	// Recomputing batch qty (blender / no. of batches changed) resets the default.
+	frappe.model.set_value(cdt, cdn, 'w1_plan_qty', q1);
+	frappe.model.set_value(cdt, cdn, 'w2_plan_qty', q2);
+	frappe.model.set_value(cdt, cdn, 'w3_plan_qty', q3);
+	frappe.model.set_value(cdt, cdn, 'w4_plan_qty', q4);
 
 	// Total batch qty = sum of weekly batches
 	let total_batch_qty = flt(row.w1_batch) + flt(row.w2_batch) + flt(row.w3_batch) + flt(row.w4_batch);
