@@ -365,7 +365,15 @@ class ForecastClub(Document):
 
 		plant_warehouse = get_plant_warehouse(self.plant)
 		if not plant_warehouse:
-			return
+			# Fail-safe: a plant is selected but has no WIP FG Warehouse configured.
+			# Do NOT silently skip validation (that let wrong-plant items through);
+			# block save and tell the user to fix the master.
+			frappe.throw(
+				_(
+					"No WIP FG Warehouse is configured for Plant {0}. "
+					"Set it in the Plant Warehouse master before adding items."
+				).format(frappe.bold(self.plant))
+			)
 
 		for idx, item in enumerate(self.items, start=1):
 			if not item.item_code:
@@ -649,6 +657,15 @@ class ForecastClub(Document):
 
 		# Restrict to the selected plant's items (Item.custom_manufacturing_location == plant warehouse)
 		plant_warehouse = get_plant_warehouse(self.plant)
+
+		# Fail-safe: if a plant is selected but has no WIP FG Warehouse configured,
+		# don't silently fetch every item (which mixed in other plants' items).
+		if self.plant and not plant_warehouse:
+			frappe.msgprint(
+				f"No WIP FG Warehouse is configured for Plant {self.plant}. "
+				f"Set it in the Plant Warehouse master before fetching items."
+			)
+			return
 
 		# Add aggregated items to the items child table
 		for item_data in items_dict.values():
