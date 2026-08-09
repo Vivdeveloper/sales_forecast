@@ -93,6 +93,10 @@ class ForecastClub(Document):
 			if hasattr(item, "planned_quantity"):
 				item.planned_quantity = flt(item.total_qty)
 
+			# Sales UOM: this bench relabels Item.stock_uom as "Sales UOM" (blank if none)
+			if item.item_code and hasattr(item, "sales_uom"):
+				item.sales_uom = frappe.db.get_value("Item", item.item_code, "stock_uom")
+
 			# Current Stock WIP: item's stock in Plant 1 WIP FG + Plant 2 WIP FG warehouses only
 			if item.item_code and hasattr(item, "current_stock"):
 				item.current_stock = self._get_item_stock_in_warehouses(item.item_code, CURRENT_STOCK_WAREHOUSES)
@@ -683,6 +687,7 @@ class ForecastClub(Document):
 			self.append("items", {
 				"item_code": item_data["item_code"],
 				"item_name": item_data["item_name"],
+				"sales_uom": frappe.db.get_value("Item", item_data["item_code"], "stock_uom"),
 				"bom": bom,
 				"week_1": item_data["week_1"],
 				"week_2": item_data["week_2"],

@@ -7,6 +7,7 @@
  "engine": "InnoDB",
  "field_order": [
   "item_code",
+  "sales_uom",
   "item_name",
   "item_manufacturing_remark",
   "total_batch_qty",
@@ -69,6 +70,16 @@
    "in_list_view": 1,
    "label": "Item Code",
    "options": "Item"
+  },
+  {
+   "fieldname": "sales_uom",
+   "fieldtype": "Link",
+   "options": "UOM",
+   "label": "Sales UOM",
+   "fetch_from": "item_code.stock_uom",
+   "fetch_if_empty": 0,
+   "read_only": 1,
+   "in_list_view": 1
   },
   {
    "columns": 1,

@@ -22,6 +22,7 @@
 
 frappe.ui.form.on("Forecast Club", {
 	refresh(frm) {
+		render_club_week_totals(frm);
 		// Ensure grid docfield formatter is set (backup for format wrap above)
 		const packaging_formatter = function (value) {
 			if (value == null || value === "") return value;
@@ -332,6 +333,7 @@ function fetch_sales_forecasts_if_dates_set(frm) {
 			callback: function(r) {
 				if (!r.exc) {
 					frm.refresh_field('items');
+					render_club_week_totals(frm);
 					// Fetch stock + packing (loose qty) for the freshly fetched rows
 					refresh_all_rows_stock(frm);
 					frappe.show_alert({
@@ -421,7 +423,10 @@ frappe.ui.form.on("Forecast Club Item", {
 	blender_week_1(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
 	blender_week_2(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
 	blender_week_3(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
-	blender_week_4(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); }
+	blender_week_4(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
+
+	items_add(frm) { render_club_week_totals(frm); },
+	items_remove(frm) { render_club_week_totals(frm); }
 });
 
 function validate_week_batch_relationship(frm, cdt, cdn, week_field, batch_field, week_label) {
@@ -588,6 +593,52 @@ function calculate_totals(frm, cdt, cdn) {
 	frappe.model.set_value(cdt, cdn, 'planned_quantity', q1 + q2 + q3 + q4);
 
 	frm.refresh_field('items');
+	render_club_week_totals(frm);
+}
+
+// UI-only week-wise total row shown below the Items table (not a data row).
+// Sums week_1..week_4 across all item rows; shows 0 when there is nothing to add.
+function render_club_week_totals(frm) {
+	const wrapper = frm.fields_dict.week_totals_html && frm.fields_dict.week_totals_html.$wrapper;
+	if (!wrapper) return;
+
+	const totals = { week_1: 0, week_2: 0, week_3: 0, week_4: 0 };
+	(frm.doc.items || []).forEach((row) => {
+		totals.week_1 += flt(row.week_1);
+		totals.week_2 += flt(row.week_2);
+		totals.week_3 += flt(row.week_3);
+		totals.week_4 += flt(row.week_4);
+	});
+
+	const fmt = (v) => format_number(v, null, 3);
+	const grand = totals.week_1 + totals.week_2 + totals.week_3 + totals.week_4;
+
+	wrapper.html(`
+		<div class="week-totals" style="margin-top:8px;">
+			<table class="table table-bordered" style="margin-bottom:0;">
+				<thead>
+					<tr class="text-muted">
+						<th style="width:40%;">Week-wise Total</th>
+						<th class="text-right">Week 1</th>
+						<th class="text-right">Week 2</th>
+						<th class="text-right">Week 3</th>
+						<th class="text-right">Week 4</th>
+						<th class="text-right">Total</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td class="text-muted">Sum of all items</td>
+						<td class="text-right"><b>${fmt(totals.week_1)}</b></td>
+						<td class="text-right"><b>${fmt(totals.week_2)}</b></td>
+						<td class="text-right"><b>${fmt(totals.week_3)}</b></td>
+						<td class="text-right"><b>${fmt(totals.week_4)}</b></td>
+						<td class="text-right"><b>${fmt(grand)}</b></td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+	`);
 }
 
 function show_work_order_dialog(frm) {

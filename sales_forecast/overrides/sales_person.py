@@ -9,6 +9,26 @@ def validate(doc, method):
 	"""Validate Sales Person custom fields"""
 	validate_duplicate_items(doc)
 	validate_duplicate_customers(doc)
+	validate_duplicate_monthly_targets(doc)
+
+
+def validate_duplicate_monthly_targets(doc):
+	"""Prevent the same Fiscal Year + Month appearing twice in Monthly Targets."""
+	if not doc.get("custom_monthly_targets"):
+		return
+
+	seen = set()
+	for row in doc.get("custom_monthly_targets"):
+		if not row.month:
+			continue
+		key = (row.fiscal_year, row.month)
+		if key in seen:
+			frappe.throw(
+				_("Row #{0}: {1} {2} is already added in Monthly Targets. Each month can only be added once per fiscal year.").format(
+					row.idx, frappe.bold(row.month), frappe.bold(row.fiscal_year or "")
+				)
+			)
+		seen.add(key)
 
 
 def validate_duplicate_items(doc):

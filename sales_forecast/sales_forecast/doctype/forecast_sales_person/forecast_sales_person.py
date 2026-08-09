@@ -11,6 +11,24 @@ class ForecastSalesPerson(Document):
 		self.validate_dates()
 		self.validate_duplicate_date_range()
 		self.validate_items()
+		self.set_monthly_target_totals()
+		self.set_actual_qty()
+
+	def set_monthly_target_totals(self):
+		"""Store the Sales Person's monthly-target qty for the forecast period."""
+		summary = get_monthly_target_summary(
+			self.sales_person, self.forecast_start_date, self.forecast_end_date
+		)
+		self.monthly_target_qty = summary["target_qty"]
+
+	def set_actual_qty(self):
+		"""Actual Qty = sum of Week 1..Week 4 across all forecast items."""
+		from frappe.utils import flt
+
+		self.actual_qty = sum(
+			flt(row.week_1) + flt(row.week_2) + flt(row.week_3) + flt(row.week_4)
+			for row in (self.items or [])
+		)
 
 	def before_insert(self):
 		self.enforce_sales_person_for_current_user()
@@ -135,3 +153,67 @@ class ForecastSalesPerson(Document):
 def get_current_user_sales_person():
 	"""Return the Sales Person linked (via Sales Person.custom_user) to the logged-in user, if any."""
 	return frappe.db.get_value("Sales Person", {"custom_user": frappe.session.user}, "name")
+
+
+MONTH_NAMES = [
+	"January", "February", "March", "April", "May", "June",
+	"July", "August", "September", "October", "November", "December",
+]
+
+
+def _target_month_date(fiscal_year, month):
+	"""Resolve a (Fiscal Year, Month name) monthly-target row to the 1st of that
+	calendar month, using the Fiscal Year's own start/end dates so it works for
+	any fiscal-year layout (Apr-Mar, Jan-Dec, etc.)."""
+	from frappe.utils import getdate, nowdate
+	import datetime
+
+	if not month or month not in MONTH_NAMES:
+		return None
+	month_no = MONTH_NAMES.index(month) + 1
+
+	fy = None
+	if fiscal_year:
+		fy = frappe.db.get_value(
+			"Fiscal Year", fiscal_year, ["year_start_date", "year_end_date"], as_dict=True
+		)
+	if fy and fy.year_start_date:
+		ys, ye = getdate(fy.year_start_date), getdate(fy.year_end_date)
+		year = ys.year if month_no >= ys.month else ye.year
+	else:
+		year = getdate(nowdate()).year
+
+	return datetime.date(year, month_no, 1)
+
+
+@frappe.whitelist()
+def get_monthly_target_summary(sales_person, start_date, end_date):
+	"""Sum the Sales Person's Monthly Targets whose month overlaps the forecast
+	period [start_date, end_date]. Returns {"target_qty": .., "target_amount": ..}."""
+	from frappe.utils import getdate, get_last_day, flt
+
+	empty = {"target_qty": 0.0, "target_amount": 0.0}
+	if not (sales_person and start_date and end_date):
+		return empty
+
+	start, end = getdate(start_date), getdate(end_date)
+
+	rows = frappe.get_all(
+		"Sales Person Monthly Target",
+		filters={"parent": sales_person, "parenttype": "Sales Person"},
+		fields=["fiscal_year", "month", "target_amount", "target_qty"],
+	)
+
+	total_qty = total_amount = 0.0
+	for r in rows:
+		d = _target_month_date(r.fiscal_year, r.month)
+		if not d:
+			continue
+		m_start = d
+		m_end = getdate(get_last_day(d))
+		# month overlaps the forecast window
+		if m_start <= end and m_end >= start:
+			total_qty += flt(r.target_qty)
+			total_amount += flt(r.target_amount)
+
+	return {"target_qty": total_qty, "target_amount": total_amount}

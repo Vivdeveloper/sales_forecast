@@ -1,0 +1,98 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Month",
+  "modified": "2026-08-09 18:36:56.354073",
+  "month_index": 1,
+  "month_name": "January",
+  "name": "January"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Month",
+  "modified": "2026-08-09 18:36:56.559733",
+  "month_index": 2,
+  "month_name": "February",
+  "name": "February"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Month",
+  "modified": "2026-08-09 18:36:56.560773",
+  "month_index": 3,
+  "month_name": "March",
+  "name": "March"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Month",
+  "modified": "2026-08-09 18:36:56.561607",
+  "month_index": 4,
+  "month_name": "April",
+  "name": "April"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Month",
+  "modified": "2026-08-09 18:36:56.562401",
+  "month_index": 5,
+  "month_name": "May",
+  "name": "May"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Month",
+  "modified": "2026-08-09 18:36:56.563347",
+  "month_index": 6,
+  "month_name": "June",
+  "name": "June"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Month",
+  "modified": "2026-08-09 18:36:56.564229",
+  "month_index": 7,
+  "month_name": "July",
+  "name": "July"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Month",
+  "modified": "2026-08-09 18:36:56.565415",
+  "month_index": 8,
+  "month_name": "August",
+  "name": "August"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Month",
+  "modified": "2026-08-09 18:36:56.567017",
+  "month_index": 9,
+  "month_name": "September",
+  "name": "September"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Month",
+  "modified": "2026-08-09 18:36:56.571683",
+  "month_index": 10,
+  "month_name": "October",
+  "name": "October"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Month",
+  "modified": "2026-08-09 18:36:56.572729",
+  "month_index": 11,
+  "month_name": "November",
+  "name": "November"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Month",
+  "modified": "2026-08-09 18:36:56.573611",
+  "month_index": 12,
+  "month_name": "December",
+  "name": "December"
+ }
+]

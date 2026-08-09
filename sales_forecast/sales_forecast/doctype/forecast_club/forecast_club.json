@@ -20,6 +20,7 @@
   "special_reason",
   "section_break_zgmv",
   "items",
+  "week_totals_html",
   "section_break_bfzn",
   "get_fetch_material_request_item",
   "ignore_available_stock",
@@ -70,6 +71,11 @@
    "fieldtype": "Table",
    "label": "Items",
    "options": "Forecast Club Item"
+  },
+  {
+   "fieldname": "week_totals_html",
+   "fieldtype": "HTML",
+   "label": "Week Totals"
   },
   {
    "fieldname": "column_break_wdxe",

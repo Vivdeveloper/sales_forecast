@@ -10,6 +10,8 @@
   "posting_date",
   "sales_person",
   "naming_series",
+  "monthly_target_qty",
+  "actual_qty",
   "column_break_jpwp",
   "forecast_start_date",
   "forecast_end_date",
@@ -18,7 +20,8 @@
   "forecast_type",
   "special_reason",
   "section_break_gbgu",
-  "items"
+  "items",
+  "week_totals_html"
  ],
  "fields": [
   {
@@ -66,6 +69,20 @@
    "reqd": 1
   },
   {
+   "description": "Sum of the Sales Person's Monthly Target Qty for the months covered by the forecast period.",
+   "fieldname": "monthly_target_qty",
+   "fieldtype": "Float",
+   "label": "Target Qty (from Monthly Targets)",
+   "read_only": 1
+  },
+  {
+   "description": "Sum of Week 1 to Week 4 quantities across all forecast items.",
+   "fieldname": "actual_qty",
+   "fieldtype": "Float",
+   "label": "Actual Qty",
+   "read_only": 1
+  },
+  {
    "fieldname": "sales_person",
    "fieldtype": "Link",
    "label": "Sales Person",
@@ -83,6 +100,11 @@
    "fieldtype": "Table",
    "label": "Items",
    "options": "Forecast Sales Person Wise Item"
+  },
+  {
+   "fieldname": "week_totals_html",
+   "fieldtype": "HTML",
+   "label": "Week Totals"
   },
   {
    "fieldname": "company",

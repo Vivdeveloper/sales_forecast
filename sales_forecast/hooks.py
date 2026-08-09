@@ -43,6 +43,7 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
+doctype_js = {"Sales Person": "public/js/sales_person.js"}
 # doctype_js = {"doctype" : "public/js/doctype.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -150,6 +151,7 @@ fixtures = [
 		"dt": "Workflow Action Master",
 		"filters": [["name", "in", ["Send for Production", "Complete & Submit"]]],
 	},
+	{"dt": "Month"},
 ]
 
 # Document Events

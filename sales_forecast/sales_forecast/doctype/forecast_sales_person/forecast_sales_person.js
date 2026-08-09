@@ -10,6 +10,8 @@ frappe.ui.form.on("Forecast Sales Person", {
 		show_sales_person_info(frm);
 		apply_week_locks(frm);
 		lock_sales_person_for_current_user(frm);
+		update_monthly_target(frm);
+		render_week_totals(frm);
 	},
 
 	posting_date(frm) {
@@ -26,28 +28,114 @@ frappe.ui.form.on("Forecast Sales Person", {
 			setup_item_customer_filters(frm);
 			show_sales_person_info(frm);
 		}
+		update_monthly_target(frm);
 	},
 
 	forecast_start_date(frm) {
 		if (frm.doc.forecast_start_date) {
 			validate_forecast_date(frm, 'forecast_start_date');
 		}
+		update_monthly_target(frm);
 	},
 
 	forecast_end_date(frm) {
 		if (frm.doc.forecast_end_date) {
 			validate_forecast_date(frm, 'forecast_end_date');
 		}
+		update_monthly_target(frm);
 	}
 });
+
+// Pull the Sales Person's Monthly Target totals for the forecast period and show
+// them in the read-only Target fields.
+function update_monthly_target(frm) {
+	if (!frm.doc.sales_person || !frm.doc.forecast_start_date || !frm.doc.forecast_end_date) {
+		frm.set_value('monthly_target_qty', 0);
+		return;
+	}
+
+	frappe.call({
+		method: 'sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person.get_monthly_target_summary',
+		args: {
+			sales_person: frm.doc.sales_person,
+			start_date: frm.doc.forecast_start_date,
+			end_date: frm.doc.forecast_end_date
+		},
+		callback: function(r) {
+			if (r.message) {
+				frm.set_value('monthly_target_qty', r.message.target_qty);
+			}
+		}
+	});
+}
 
 frappe.ui.form.on("Forecast Sales Person Wise Item", {
 	items_add(frm) {
 		setup_item_group_filter(frm);
 		setup_item_customer_filters(frm);
 		apply_week_locks(frm);
-	}
+		render_week_totals(frm);
+	},
+	items_remove(frm) {
+		render_week_totals(frm);
+	},
+	week_1: (frm) => render_week_totals(frm),
+	week_2: (frm) => render_week_totals(frm),
+	week_3: (frm) => render_week_totals(frm),
+	week_4: (frm) => render_week_totals(frm)
 });
+
+// Show a live, UI-only week-wise total row below the Items table (not a data row).
+// Sums week_1..week_4 across all item rows; shows 0 when there is nothing to add.
+function render_week_totals(frm) {
+	const wrapper = frm.fields_dict.week_totals_html && frm.fields_dict.week_totals_html.$wrapper;
+	if (!wrapper) return;
+
+	const totals = { week_1: 0, week_2: 0, week_3: 0, week_4: 0 };
+	(frm.doc.items || []).forEach((row) => {
+		totals.week_1 += flt(row.week_1);
+		totals.week_2 += flt(row.week_2);
+		totals.week_3 += flt(row.week_3);
+		totals.week_4 += flt(row.week_4);
+	});
+
+	const fmt = (v) => format_number(v, null, 3);
+	const grand = totals.week_1 + totals.week_2 + totals.week_3 + totals.week_4;
+
+	// Actual Qty field = grand total of all weeks. Assign directly (server validate
+	// persists it) so simply viewing a saved doc doesn't mark it dirty.
+	if (frm.doc.actual_qty !== grand) {
+		frm.doc.actual_qty = grand;
+		frm.refresh_field('actual_qty');
+	}
+
+	wrapper.html(`
+		<div class="week-totals" style="margin-top:8px;">
+			<table class="table table-bordered" style="margin-bottom:0;">
+				<thead>
+					<tr class="text-muted">
+						<th style="width:40%;">Week-wise Total</th>
+						<th class="text-right">Week 1</th>
+						<th class="text-right">Week 2</th>
+						<th class="text-right">Week 3</th>
+						<th class="text-right">Week 4</th>
+						<th class="text-right">Total</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td class="text-muted">Sum of all items</td>
+						<td class="text-right"><b>${fmt(totals.week_1)}</b></td>
+						<td class="text-right"><b>${fmt(totals.week_2)}</b></td>
+						<td class="text-right"><b>${fmt(totals.week_3)}</b></td>
+						<td class="text-right"><b>${fmt(totals.week_4)}</b></td>
+						<td class="text-right"><b>${fmt(grand)}</b></td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+	`);
+}
 
 // Restrict the Item Code picker in the Items table to Finished Goods (and its
 // child item groups), so raw materials/packing material etc. don't show up.
