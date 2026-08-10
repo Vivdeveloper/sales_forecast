@@ -13,6 +13,15 @@ class ForecastSalesPerson(Document):
 		self.validate_items()
 		self.set_monthly_target_totals()
 		self.set_actual_qty()
+		self.set_item_sales_uom()
+
+	def set_item_sales_uom(self):
+		"""Fill each item's Sales UOM from the item master (this bench labels
+		Item.stock_uom as 'Sales UOM'). Guarantees it on save even if the client-side
+		fetch_from didn't fire (e.g. API/import)."""
+		for row in self.items or []:
+			if row.item_code:
+				row.sales_uom = frappe.db.get_value("Item", row.item_code, "stock_uom")
 
 	def set_monthly_target_totals(self):
 		"""Store the Sales Person's monthly-target qty for the forecast period."""

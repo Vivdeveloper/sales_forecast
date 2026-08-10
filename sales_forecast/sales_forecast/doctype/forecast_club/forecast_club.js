@@ -23,6 +23,7 @@
 frappe.ui.form.on("Forecast Club", {
 	refresh(frm) {
 		render_club_week_totals(frm);
+		add_forecast_status_button(frm);
 		// Ensure grid docfield formatter is set (backup for format wrap above)
 		const packaging_formatter = function (value) {
 			if (value == null || value === "") return value;
@@ -197,14 +198,17 @@ frappe.ui.form.on("Forecast Club", {
 
 	forecast_start_date(frm) {
 		fetch_sales_forecasts_if_dates_set(frm);
+		add_forecast_status_button(frm);
 	},
 
 	forecast_end_date(frm) {
 		fetch_sales_forecasts_if_dates_set(frm);
+		add_forecast_status_button(frm);
 	},
 
 	company(frm) {
 		fetch_sales_forecasts_if_dates_set(frm);
+		add_forecast_status_button(frm);
 	},
 
 	plant(frm) {
@@ -598,6 +602,58 @@ function calculate_totals(frm, cdt, cdn) {
 
 // UI-only week-wise total row shown below the Items table (not a data row).
 // Sums week_1..week_4 across all item rows; shows 0 when there is nothing to add.
+// Once both forecast dates are set, offer a button that shows which sales persons have
+// (or haven't) created their Forecast Sales Person for that period, and its status.
+function add_forecast_status_button(frm) {
+	if (!(frm.doc.forecast_start_date && frm.doc.forecast_end_date)) return;
+	const label = __("Forecast Status by Person");
+	if (frm.custom_buttons && frm.custom_buttons[label]) return; // avoid duplicates
+	frm.add_custom_button(label, () => show_forecast_status_dialog(frm));
+}
+
+function show_forecast_status_dialog(frm) {
+	frappe.call({
+		method: "sales_forecast.sales_forecast.doctype.forecast_club.forecast_club.get_forecast_status_by_person",
+		args: {
+			company: frm.doc.company,
+			start_date: frm.doc.forecast_start_date,
+			end_date: frm.doc.forecast_end_date,
+		},
+		freeze: true,
+		freeze_message: __("Checking forecast status..."),
+		callback: (r) => {
+			const rows = r.message || [];
+			let created = 0;
+			rows.forEach((x) => { if (x.created) created += 1; });
+			let body = "";
+			rows.forEach((x) => {
+				const color = x.created ? "green" : "red";
+				body += `<tr>
+					<td>${frappe.utils.escape_html(x.sales_person)}</td>
+					<td><span class="indicator-pill ${color}">${frappe.utils.escape_html(x.status)}</span></td>
+				</tr>`;
+			});
+			if (!body) body = `<tr><td colspan="2" class="text-muted">${__("No active sales persons found.")}</td></tr>`;
+			const d = new frappe.ui.Dialog({
+				title: __("Forecast Status by Sales Person"),
+				size: "large",
+				fields: [{ fieldtype: "HTML", fieldname: "html" }],
+			});
+			d.fields_dict.html.$wrapper.html(`
+				<div class="text-muted" style="margin-bottom:8px;">
+					${created} ${__("of")} ${rows.length} ${__("sales persons have created a forecast for")}
+					${frappe.datetime.str_to_user(frm.doc.forecast_start_date)} – ${frappe.datetime.str_to_user(frm.doc.forecast_end_date)}${frm.doc.company ? " (" + frappe.utils.escape_html(frm.doc.company) + ")" : ""}.
+				</div>
+				<table class="table table-bordered" style="margin-bottom:0;">
+					<thead><tr><th style="width:60%;">${__("Sales Person")}</th><th>${__("Forecast Status")}</th></tr></thead>
+					<tbody>${body}</tbody>
+				</table>
+			`);
+			d.show();
+		},
+	});
+}
+
 function render_club_week_totals(frm) {
 	const wrapper = frm.fields_dict.week_totals_html && frm.fields_dict.week_totals_html.$wrapper;
 	if (!wrapper) return;

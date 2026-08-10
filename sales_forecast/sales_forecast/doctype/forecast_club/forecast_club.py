@@ -2,8 +2,15 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt
+from frappe.utils import flt, getdate, get_first_day, get_last_day
+
+
+# A Forecast Club "locks" its items only in these workflow states (a valid/committed flow):
+#   Pending Approval, Submitted, Approved, Production Plan Completed.
+# Draft, Forecast Planned, Production Plan Pending and Cancelled do NOT lock.
+CLUB_LOCKED_STATES = ("Pending Approval", "Submitted", "Approved", "Production Plan Completed")
 
 
 FG_WAREHOUSE_STOCK_FIELDS = {
@@ -40,6 +47,78 @@ class ForecastClub(Document):
 		self.check_duplicate_items()
 		self.validate_plant_items()
 		self.validate_duplicate_date_range()
+		self.validate_no_locked_items()
+
+	def get_locked_items(self):
+		"""Return {item_code: (club_name, workflow_state)} for items already part of a valid
+		flow in ANOTHER club that clashes on Month x Plant x Type.
+
+		Clash = the other club (not self, in a locked state, not cancelled) has the same
+		plant and same forecast_type, and its date range shares at least one month with
+		this club's range (a month counts if even one day is covered).
+		"""
+		if not (self.forecast_start_date and self.forecast_end_date and self.plant and self.forecast_type):
+			return {}
+
+		# Expand this club's range to whole-month bounds so "one day of a month counts".
+		start_first = get_first_day(getdate(self.forecast_start_date))
+		end_last = get_last_day(getdate(self.forecast_end_date))
+
+		rows = frappe.db.sql(
+			"""
+			SELECT ci.item_code AS item_code, fc.name AS club, fc.workflow_state AS state
+			FROM `tabForecast Club` fc
+			JOIN `tabForecast Club Item` ci ON ci.parent = fc.name
+			WHERE fc.name != %(self_name)s
+			  AND fc.docstatus != 2
+			  AND fc.workflow_state IN %(locked_states)s
+			  AND fc.plant = %(plant)s
+			  AND fc.forecast_type = %(ftype)s
+			  AND fc.forecast_start_date <= %(end_last)s
+			  AND fc.forecast_end_date >= %(start_first)s
+			  AND ci.item_code IS NOT NULL AND ci.item_code != ''
+			""",
+			{
+				"self_name": self.name or "new-forecast-club",
+				"locked_states": CLUB_LOCKED_STATES,
+				"plant": self.plant,
+				"ftype": self.forecast_type,
+				"start_first": start_first,
+				"end_last": end_last,
+			},
+			as_dict=True,
+		)
+		locked = {}
+		for r in rows:
+			locked.setdefault(r.item_code, (r.club, r.state))  # keep first club per item
+		return locked
+
+	def validate_no_locked_items(self):
+		"""Block moving this club INTO a valid-flow (locked) state if any of its items are
+		already part of a valid flow in another club (overlapping month, same plant & type).
+
+		This enforces the lagging case: club A can sit in Forecast Planned / Production Plan
+		Pending (non-locking) while club B with the same item advances to a locked state
+		(that's allowed at the time). When A is later moved forward into a locked state,
+		this check blocks it — the item is already committed elsewhere.
+		"""
+		# Only enforced once THIS club is entering/held in a locked state. Draft, Forecast
+		# Planned, Production Plan Pending and Cancelled saves stay free.
+		if self.workflow_state not in CLUB_LOCKED_STATES:
+			return
+		locked = self.get_locked_items()
+		if not locked:
+			return
+		conflicts = [(it.item_code, locked[it.item_code]) for it in (self.items or []) if it.item_code in locked]
+		if conflicts:
+			msg = "<br>".join(
+				_("{0} — already in {1} ({2})").format(frappe.bold(ic), club, state)
+				for ic, (club, state) in conflicts
+			)
+			frappe.throw(
+				_("These items are already part of a valid production flow in another plan (overlapping month, same plant &amp; type) and cannot be moved forward here:<br>{0}").format(msg),
+				title=_("Items Already In A Valid Flow"),
+			)
 
 	def on_submit(self):
 		"""Set initial status on submit"""
@@ -671,6 +750,10 @@ class ForecastClub(Document):
 			)
 			return
 
+		# Items already committed in another club (same month x plant x type) are skipped.
+		locked = self.get_locked_items()
+		skipped = []
+
 		# Add aggregated items to the items child table
 		for item_data in items_dict.values():
 			# Skip items that do not belong to the selected plant
@@ -680,6 +763,12 @@ class ForecastClub(Document):
 				)
 				if manufacturing_location != plant_warehouse:
 					continue
+
+			# Skip items already locked in another committed club for an overlapping month
+			if item_data["item_code"] in locked:
+				club, state = locked[item_data["item_code"]]
+				skipped.append((item_data["item_code"], club, state))
+				continue
 
 			# Get BOM for the item if it exists
 			bom = frappe.db.get_value("BOM", {"item": item_data["item_code"], "is_default": 1, "is_active": 1}, "name")
@@ -697,6 +786,17 @@ class ForecastClub(Document):
 
 		plant_note = f" for {self.plant}" if self.plant else ""
 		frappe.msgprint(f"Fetched {len(self.items)} items{plant_note} from {len(forecast_docs)} sales forecasts")
+
+		if skipped:
+			msg = "<br>".join(
+				_("{0} — already in {1} ({2})").format(frappe.bold(ic), club, state)
+				for ic, club, state in skipped
+			)
+			frappe.msgprint(
+				_("{0} item(s) were <b>not</b> added because they are already forecasted in another plan for an overlapping month (same plant &amp; type):<br>{1}").format(len(skipped), msg),
+				title=_("Items Skipped"),
+				indicator="orange",
+			)
 
 	@frappe.whitelist()
 	def create_material_requests(self):
@@ -839,6 +939,48 @@ class ForecastClub(Document):
 def get_item_stock_and_packaging(item_code, company=None):
 	"""Whitelisted wrapper for client calls. Returns custom_company_stock and packaging list for an item."""
 	return ForecastClub.get_item_stock_and_packaging(item_code, company=company)
+
+
+@frappe.whitelist()
+def get_forecast_status_by_person(company=None, start_date=None, end_date=None):
+	"""For the given forecast period (and company), list every active sales person with
+	whether they've created a Forecast Sales Person and its current status.
+
+	Used by the Forecast Club form's 'Forecast Status by Person' button so planners can
+	see who is still pending before clubbing. Sorted: not-created first, then by name.
+	"""
+	persons = frappe.get_all(
+		"Sales Person", filters={"enabled": 1, "is_group": 0}, pluck="name", order_by="name"
+	)
+
+	fsp_filters = {"docstatus": ["!=", 2]}
+	if start_date:
+		fsp_filters["forecast_start_date"] = start_date
+	if end_date:
+		fsp_filters["forecast_end_date"] = end_date
+	if company:
+		fsp_filters["company"] = company
+
+	fsps = frappe.get_all(
+		"Forecast Sales Person",
+		filters=fsp_filters,
+		fields=["sales_person", "workflow_state", "docstatus", "name"],
+	)
+	by_person = {}
+	for f in fsps:
+		by_person.setdefault(f.sales_person, f)
+
+	result = []
+	for p in persons:
+		f = by_person.get(p)
+		if f:
+			status = f.workflow_state or ("Submitted" if f.docstatus == 1 else "Draft")
+			result.append({"sales_person": p, "created": 1, "status": status, "forecast": f.name})
+		else:
+			result.append({"sales_person": p, "created": 0, "status": "Not Created", "forecast": None})
+
+	result.sort(key=lambda x: (x["created"], x["sales_person"]))
+	return result
 
 
 @frappe.whitelist()
