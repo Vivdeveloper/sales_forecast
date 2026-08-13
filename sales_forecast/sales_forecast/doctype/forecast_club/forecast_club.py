@@ -943,14 +943,18 @@ def get_item_stock_and_packaging(item_code, company=None):
 
 @frappe.whitelist()
 def get_forecast_status_by_person(company=None, start_date=None, end_date=None):
-	"""For the given forecast period (and company), list every active sales person with
-	whether they've created a Forecast Sales Person and its current status.
+	"""For the given forecast period (and company), list the sales persons who are
+	expected to submit a forecast (Sales Person.custom_forecast_to_be_filled = 1) and
+	whether they've created a Forecast Sales Person, with its current status.
 
 	Used by the Forecast Club form's 'Forecast Status by Person' button so planners can
 	see who is still pending before clubbing. Sorted: not-created first, then by name.
 	"""
 	persons = frappe.get_all(
-		"Sales Person", filters={"enabled": 1, "is_group": 0}, pluck="name", order_by="name"
+		"Sales Person",
+		filters={"enabled": 1, "is_group": 0, "custom_forecast_to_be_filled": 1},
+		pluck="name",
+		order_by="name",
 	)
 
 	fsp_filters = {"docstatus": ["!=", 2]}
