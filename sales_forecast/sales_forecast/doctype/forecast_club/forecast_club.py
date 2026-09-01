@@ -950,9 +950,11 @@ def get_forecast_status_by_person(company=None, start_date=None, end_date=None):
 	Used by the Forecast Club form's 'Forecast Status by Person' button so planners can
 	see who is still pending before clubbing. Sorted: not-created first, then by name.
 	"""
+	# Anyone flagged to file a forecast (custom_forecast_to_be_filled) is expected here,
+	# regardless of is_group — some group Sales Persons still submit forecasts.
 	persons = frappe.get_all(
 		"Sales Person",
-		filters={"enabled": 1, "is_group": 0, "custom_forecast_to_be_filled": 1},
+		filters={"enabled": 1, "custom_forecast_to_be_filled": 1},
 		pluck="name",
 		order_by="name",
 	)
