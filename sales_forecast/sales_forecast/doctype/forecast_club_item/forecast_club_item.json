@@ -19,6 +19,7 @@
   "bom",
   "last_month_sales",
   "planned_quantity",
+  "plan_status",
   "column_break_pspq",
   "week_1",
   "blender_week_1",
@@ -251,6 +252,15 @@
    "fieldname": "planned_quantity",
    "fieldtype": "Float",
    "label": "Planned Quantity",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "plan_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Plan Status",
+   "options": "\nPlanned\nUnplanned",
    "read_only": 1
   },
   {

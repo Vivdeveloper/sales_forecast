@@ -146,6 +146,16 @@ class ForecastClub(Document):
 					plan = batch_qty  # default / cap to batch qty
 				setattr(item, plan_field, plan)
 
+			# Plan Status: "Planned" if any of the 4 weeks has a plan qty, else "Unplanned".
+			# (Mirrors the pencil-popup weekly plan qtys — an item with production planned in
+			# any week is Planned; one with nothing planned across all 4 weeks is Unplanned.)
+			if hasattr(item, "plan_status"):
+				any_planned = any(
+					flt(getattr(item, f"{wk}_plan_qty", 0) or 0) > 0
+					for wk in ("w1", "w2", "w3", "w4")
+				)
+				item.plan_status = "Planned" if any_planned else "Unplanned"
+
 			# Calculate total_batch_qty as sum of all weekly batches
 			item.total_batch_qty = (
 				(item.w1_batch or 0) +
