@@ -628,12 +628,19 @@ function show_forecast_status_dialog(frm) {
 			let body = "";
 			rows.forEach((x) => {
 				const color = x.created ? "green" : "red";
+				// Show each person's OWN forecast period (they may have filed a sub-range like
+				// 10–20, not the full month), instead of a single date range in the heading.
+				let period = "-";
+				if (x.forecast_start_date && x.forecast_end_date) {
+					period = `${frappe.datetime.str_to_user(x.forecast_start_date)} – ${frappe.datetime.str_to_user(x.forecast_end_date)}`;
+				}
 				body += `<tr>
 					<td>${frappe.utils.escape_html(x.sales_person)}</td>
 					<td><span class="indicator-pill ${color}">${frappe.utils.escape_html(x.status)}</span></td>
+					<td>${period}</td>
 				</tr>`;
 			});
-			if (!body) body = `<tr><td colspan="2" class="text-muted">${__("No active sales persons found.")}</td></tr>`;
+			if (!body) body = `<tr><td colspan="3" class="text-muted">${__("No active sales persons found.")}</td></tr>`;
 			const d = new frappe.ui.Dialog({
 				title: __("Forecast Status by Sales Person"),
 				size: "large",
@@ -641,11 +648,10 @@ function show_forecast_status_dialog(frm) {
 			});
 			d.fields_dict.html.$wrapper.html(`
 				<div class="text-muted" style="margin-bottom:8px;">
-					${created} ${__("of")} ${rows.length} ${__("sales persons have created a forecast for")}
-					${frappe.datetime.str_to_user(frm.doc.forecast_start_date)} – ${frappe.datetime.str_to_user(frm.doc.forecast_end_date)}${frm.doc.company ? " (" + frappe.utils.escape_html(frm.doc.company) + ")" : ""}.
+					${created} ${__("of")} ${rows.length} ${__("sales persons have created a forecast")}${frm.doc.company ? " (" + frappe.utils.escape_html(frm.doc.company) + ")" : ""}. ${__("Each person's forecast period is shown below.")}
 				</div>
 				<table class="table table-bordered" style="margin-bottom:0;">
-					<thead><tr><th style="width:60%;">${__("Sales Person")}</th><th>${__("Forecast Status")}</th></tr></thead>
+					<thead><tr><th style="width:45%;">${__("Sales Person")}</th><th style="width:25%;">${__("Forecast Status")}</th><th>${__("Forecast Period")}</th></tr></thead>
 					<tbody>${body}</tbody>
 				</table>
 			`);

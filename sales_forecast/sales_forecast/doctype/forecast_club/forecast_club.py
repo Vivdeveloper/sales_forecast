@@ -969,19 +969,27 @@ def get_forecast_status_by_person(company=None, start_date=None, end_date=None):
 		order_by="name",
 	)
 
+	# A person counts as "created" if their forecast range OVERLAPS the club's range — not
+	# only when it exactly equals the full month. So someone who filed for 10–20 (a sub
+	# range) is included too. Overlap = fsp.start <= club.end AND fsp.end >= club.start.
 	fsp_filters = {"docstatus": ["!=", 2]}
-	if start_date:
-		fsp_filters["forecast_start_date"] = start_date
-	if end_date:
-		fsp_filters["forecast_end_date"] = end_date
 	if company:
 		fsp_filters["company"] = company
+	if start_date:
+		fsp_filters["forecast_end_date"] = [">=", start_date]
+	if end_date:
+		fsp_filters["forecast_start_date"] = ["<=", end_date]
 
 	fsps = frappe.get_all(
 		"Forecast Sales Person",
 		filters=fsp_filters,
-		fields=["sales_person", "workflow_state", "docstatus", "name"],
+		fields=[
+			"sales_person", "workflow_state", "docstatus", "name",
+			"forecast_start_date", "forecast_end_date",
+		],
+		order_by="forecast_start_date asc",
 	)
+	# Keep the earliest-starting forecast per person (there may be several sub-ranges).
 	by_person = {}
 	for f in fsps:
 		by_person.setdefault(f.sales_person, f)
@@ -991,9 +999,27 @@ def get_forecast_status_by_person(company=None, start_date=None, end_date=None):
 		f = by_person.get(p)
 		if f:
 			status = f.workflow_state or ("Submitted" if f.docstatus == 1 else "Draft")
-			result.append({"sales_person": p, "created": 1, "status": status, "forecast": f.name})
+			result.append(
+				{
+					"sales_person": p,
+					"created": 1,
+					"status": status,
+					"forecast": f.name,
+					"forecast_start_date": str(f.forecast_start_date or ""),
+					"forecast_end_date": str(f.forecast_end_date or ""),
+				}
+			)
 		else:
-			result.append({"sales_person": p, "created": 0, "status": "Not Created", "forecast": None})
+			result.append(
+				{
+					"sales_person": p,
+					"created": 0,
+					"status": "Not Created",
+					"forecast": None,
+					"forecast_start_date": "",
+					"forecast_end_date": "",
+				}
+			)
 
 	result.sort(key=lambda x: (x["created"], x["sales_person"]))
 	return result
