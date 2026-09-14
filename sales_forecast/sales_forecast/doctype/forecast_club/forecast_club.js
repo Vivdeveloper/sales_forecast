@@ -358,8 +358,9 @@ frappe.ui.form.on("Forecast Club Item", {
 		const row = locals[cdt][cdn];
 		if (!row) return;
 		["w1", "w2", "w3", "w4"].forEach((wk) => {
-			if (!flt(row[`${wk}_plan_qty`]) && flt(row[`${wk}_batch_qty`]) > 0) {
-				frappe.model.set_value(cdt, cdn, `${wk}_plan_qty`, flt(row[`${wk}_batch_qty`]));
+			const total = flt(row[`${wk}_batch_qty`]) + flt(row[`${wk}_batch_qty2`]);
+			if (!flt(row[`${wk}_plan_qty`]) && total > 0) {
+				frappe.model.set_value(cdt, cdn, `${wk}_plan_qty`, total);
 			}
 		});
 	},
@@ -428,6 +429,27 @@ frappe.ui.form.on("Forecast Club Item", {
 	blender_week_2(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
 	blender_week_3(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
 	blender_week_4(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
+
+	// Blender 2 (only when "Use 2nd Blender" is on) — same recompute triggers as Blender 1.
+	w1_batch2(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
+	w2_batch2(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
+	w3_batch2(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
+	w4_batch2(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
+	batch_capacity2_1(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
+	batch_capacity2_2(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
+	batch_capacity2_3(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
+	batch_capacity2_4(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
+	blender2_week_1(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
+	blender2_week_2(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
+	blender2_week_3(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
+	blender2_week_4(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
+
+	// Per-week 2nd blender toggle: unchecking a week clears THAT week's Blender 2 fields
+	// (so it stops contributing), then recomputes.
+	enable_blender_2_w1(frm, cdt, cdn) { toggle_blender2_week(frm, cdt, cdn, 1); },
+	enable_blender_2_w2(frm, cdt, cdn) { toggle_blender2_week(frm, cdt, cdn, 2); },
+	enable_blender_2_w3(frm, cdt, cdn) { toggle_blender2_week(frm, cdt, cdn, 3); },
+	enable_blender_2_w4(frm, cdt, cdn) { toggle_blender2_week(frm, cdt, cdn, 4); },
 
 	items_add(frm) { render_club_week_totals(frm); },
 	items_remove(frm) { render_club_week_totals(frm); }
@@ -549,7 +571,8 @@ function cap_plan_qty(frm, cdt, cdn, plan_field, batch_qty_field, week_label) {
 	let row = locals[cdt][cdn];
 	if (!row) return;
 	let plan = flt(row[plan_field]);
-	let max_qty = flt(row[batch_qty_field]);
+	// Max = this week's total batch qty across Blender 1 + Blender 2.
+	let max_qty = flt(row[batch_qty_field]) + flt(row[batch_qty_field + "2"]);
 	if (plan > max_qty) {
 		frappe.model.set_value(cdt, cdn, plan_field, max_qty);
 		frappe.show_alert({
@@ -561,40 +584,48 @@ function cap_plan_qty(frm, cdt, cdn, plan_field, batch_qty_field, week_label) {
 	}
 }
 
+// Per-week 2nd-blender checkbox: clear that week's Blender 2 fields when turned off, recompute.
+function toggle_blender2_week(frm, cdt, cdn, n) {
+	const row = locals[cdt][cdn];
+	if (row && !row["enable_blender_2_w" + n]) {
+		frappe.model.set_value(cdt, cdn, "blender2_week_" + n, "");
+		frappe.model.set_value(cdt, cdn, "batch_capacity2_" + n, "");
+		frappe.model.set_value(cdt, cdn, "w" + n + "_batch2", 0);
+	}
+	calculate_totals(frm, cdt, cdn);
+}
+
 function calculate_totals(frm, cdt, cdn) {
 	let row = locals[cdt][cdn];
 	if (!row) return;
 
-	// Weekly batch qty = that week's batch capacity (from blender) * number of batches
-	let q1 = flt(row.batch_capacity_1) * flt(row.w1_batch);
-	let q2 = flt(row.batch_capacity_2) * flt(row.w2_batch);
-	let q3 = flt(row.batch_capacity_3) * flt(row.w3_batch);
-	let q4 = flt(row.batch_capacity_4) * flt(row.w4_batch);
+	const fc = flt(row.filling_capacity);
+	let total_batches = 0, total_qty = 0;
 
-	frappe.model.set_value(cdt, cdn, 'w1_batch_qty', q1);
-	frappe.model.set_value(cdt, cdn, 'w2_batch_qty', q2);
-	frappe.model.set_value(cdt, cdn, 'w3_batch_qty', q3);
-	frappe.model.set_value(cdt, cdn, 'w4_batch_qty', q4);
+	[1, 2, 3, 4].forEach((n) => {
+		// 2nd blender is enabled PER WEEK via its own checkbox.
+		const b2 = !!row['enable_blender_2_w' + n];
+		// Weekly batch qty (loose) = blender capacity * number of batches, per blender.
+		const b1q = flt(row['batch_capacity_' + n]) * flt(row['w' + n + '_batch']);
+		const b2q = b2 ? flt(row['batch_capacity2_' + n]) * flt(row['w' + n + '_batch2']) : 0;
+		frappe.model.set_value(cdt, cdn, 'w' + n + '_batch_qty', b1q);
+		frappe.model.set_value(cdt, cdn, 'w' + n + '_batch_qty2', b2q);
+		// Packed Goods Qty per blender = loose batch qty / filling capacity.
+		frappe.model.set_value(cdt, cdn, 'w' + n + '_pkg_qty_b1', fc ? b1q / fc : 0);
+		frappe.model.set_value(cdt, cdn, 'w' + n + '_pkg_qty_b2', fc ? b2q / fc : 0);
+		// Plan Qty defaults to that week's TOTAL batch qty (both blenders); the user may reduce it.
+		frappe.model.set_value(cdt, cdn, 'w' + n + '_plan_qty', b1q + b2q);
+		total_batches += flt(row['w' + n + '_batch']) + (b2 ? flt(row['w' + n + '_batch2']) : 0);
+		total_qty += b1q + b2q;
+	});
 
-	// Plan Qty defaults to that week's batch qty (the max); the user may reduce it.
-	// Recomputing batch qty (blender / no. of batches changed) resets the default.
-	frappe.model.set_value(cdt, cdn, 'w1_plan_qty', q1);
-	frappe.model.set_value(cdt, cdn, 'w2_plan_qty', q2);
-	frappe.model.set_value(cdt, cdn, 'w3_plan_qty', q3);
-	frappe.model.set_value(cdt, cdn, 'w4_plan_qty', q4);
-
-	// Total batch qty = sum of weekly batches
-	let total_batch_qty = flt(row.w1_batch) + flt(row.w2_batch) + flt(row.w3_batch) + flt(row.w4_batch);
-	frappe.model.set_value(cdt, cdn, 'total_batch_qty', total_batch_qty);
-
-	// Total qty = sum of weekly batch quantities
-	frappe.model.set_value(cdt, cdn, 'total_qty', q1 + q2 + q3 + q4);
+	frappe.model.set_value(cdt, cdn, 'total_batch_qty', total_batches);
+	frappe.model.set_value(cdt, cdn, 'total_qty', total_qty);
 
 	// Forecast Quantity = total weekly demand; Planned Quantity = total planned production.
-	// before_save recomputes both server-side; mirroring them here shows them before save.
 	frappe.model.set_value(cdt, cdn, 'forecast_quantity',
 		flt(row.week_1) + flt(row.week_2) + flt(row.week_3) + flt(row.week_4));
-	frappe.model.set_value(cdt, cdn, 'planned_quantity', q1 + q2 + q3 + q4);
+	frappe.model.set_value(cdt, cdn, 'planned_quantity', total_qty);
 
 	frm.refresh_field('items');
 	render_club_week_totals(frm);

@@ -149,42 +149,30 @@ class ForecastSalesPerson(Document):
 			)
 
 	def validate_items(self):
-		"""Validate forecast_sales_person items for duplicates (no filter or required check on item_code)"""
+		"""Validate items for duplicates. Uniqueness is on (item_code, customer, packed_good) —
+		the same item may repeat across rows for different Packed Goods (and/or customers)."""
 		if not self.items:
 			frappe.throw(_("Please add at least one item in the ForecastSalesPerson Items table"))
 
-		seen_combinations = {}
-		seen_items = {}
-
+		seen = {}
 		for idx, item in enumerate(self.items, start=1):
 			# Skip duplicate checks when item_code is blank (item_code has no validation)
 			if not item.item_code:
 				continue
 
-			# Check for duplicate item_code + customer combination
-			if item.customer:
-				combination_key = f"{item.item_code}||{item.customer}"
-				if combination_key in seen_combinations:
-					frappe.throw(
-						_("Row #{0}: Duplicate entry found for Item Code '{1}' and Customer '{2}'. Same combination exists in Row #{3}").format(
-							idx,
-							item.item_code,
-							item.customer,
-							seen_combinations[combination_key]
-						)
+			key = (item.item_code, item.get("customer") or "", item.get("packed_goods") or "")
+			if key in seen:
+				parts = [_("Item Code '{0}'").format(item.item_code)]
+				if item.get("customer"):
+					parts.append(_("Customer '{0}'").format(item.customer))
+				if item.get("packed_goods"):
+					parts.append(_("Packed Goods '{0}'").format(item.packed_goods))
+				frappe.throw(
+					_("Row #{0}: Duplicate entry for {1}. Same combination exists in Row #{2}").format(
+						idx, ", ".join(parts), seen[key]
 					)
-				seen_combinations[combination_key] = idx
-			else:
-				# Check for duplicate item_code only (when customer is not provided)
-				if item.item_code in seen_items:
-					frappe.throw(
-						_("Row #{0}: Duplicate Item Code '{1}' found. Same item exists in Row #{2}").format(
-							idx,
-							item.item_code,
-							seen_items[item.item_code]
-						)
-					)
-				seen_items[item.item_code] = idx
+				)
+			seen[key] = idx
 
 
 @frappe.whitelist()

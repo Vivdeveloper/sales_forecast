@@ -127,24 +127,25 @@ class ForecastClub(Document):
 	def before_save(self):
 		"""Calculate totals for each item and set custom_company_stock, custom_item_packaging_material"""
 		for item in self.items:
-			if flt(item.batch_capacity_1):
-				item.w1_batch_qty = (item.w1_batch or 0) * flt(item.batch_capacity_1)
-			if flt(item.batch_capacity_2):
-				item.w2_batch_qty = (item.w2_batch or 0) * flt(item.batch_capacity_2)
-			if flt(item.batch_capacity_3):
-				item.w3_batch_qty = (item.w3_batch or 0) * flt(item.batch_capacity_3)
-			if flt(item.batch_capacity_4):
-				item.w4_batch_qty = (item.w4_batch or 0) * flt(item.batch_capacity_4)
-
-			# Plan Qty is reduce-only per week: default to the week's batch qty, and
-			# clamp to [0, batch_qty] (also enforced server-side for API/import safety).
-			for wk in ("w1", "w2", "w3", "w4"):
-				plan_field = f"{wk}_plan_qty"
-				batch_qty = flt(getattr(item, f"{wk}_batch_qty", 0))
-				plan = flt(getattr(item, plan_field, 0) or 0)
-				if plan <= 0 or plan > batch_qty:
-					plan = batch_qty  # default / cap to batch qty
-				setattr(item, plan_field, plan)
+			fc = flt(item.get("filling_capacity"))
+			for n in (1, 2, 3, 4):
+				# 2nd blender is enabled PER WEEK via its own checkbox.
+				use_b2 = bool(item.get(f"enable_blender_2_w{n}"))
+				# Batch Qty (loose) = No of Batches x Blender Capacity, per blender.
+				b1_qty = flt(item.get(f"w{n}_batch")) * flt(item.get(f"batch_capacity_{n}"))
+				b2_qty = (flt(item.get(f"w{n}_batch2")) * flt(item.get(f"batch_capacity2_{n}"))) if use_b2 else 0
+				item.set(f"w{n}_batch_qty", b1_qty)
+				item.set(f"w{n}_batch_qty2", b2_qty)
+				# Packed Goods Qty per blender = loose Batch Qty / Filling Capacity.
+				item.set(f"w{n}_pkg_qty_b1", (b1_qty / fc) if fc else 0)
+				item.set(f"w{n}_pkg_qty_b2", (b2_qty / fc) if fc else 0)
+				# Plan Qty defaults to the week's TOTAL batch qty (Blender 1 + Blender 2);
+				# reduce-only, clamped to [0, total] (also enforced here for API/import safety).
+				total = b1_qty + b2_qty
+				plan = flt(item.get(f"w{n}_plan_qty") or 0)
+				if plan <= 0 or plan > total:
+					plan = total
+				item.set(f"w{n}_plan_qty", plan)
 
 			# Plan Status: "Planned" if any of the 4 weeks has a plan qty, else "Unplanned".
 			# (Mirrors the pencil-popup weekly plan qtys — an item with production planned in
@@ -156,20 +157,18 @@ class ForecastClub(Document):
 				)
 				item.plan_status = "Planned" if any_planned else "Unplanned"
 
-			# Calculate total_batch_qty as sum of all weekly batches
-			item.total_batch_qty = (
-				(item.w1_batch or 0) +
-				(item.w2_batch or 0) +
-				(item.w3_batch or 0) +
-				(item.w4_batch or 0)
+			# Total batches = sum of weekly batches across both blenders (2nd counted only in
+			# the weeks where it is enabled).
+			item.total_batch_qty = sum(
+				flt(item.get(f"w{n}_batch"))
+				+ (flt(item.get(f"w{n}_batch2")) if item.get(f"enable_blender_2_w{n}") else 0)
+				for n in (1, 2, 3, 4)
 			)
 
-			# Calculate total_qty as sum of all weekly batch quantities
-			item.total_qty = (
-				(item.w1_batch_qty or 0) +
-				(item.w2_batch_qty or 0) +
-				(item.w3_batch_qty or 0) +
-				(item.w4_batch_qty or 0)
+			# Total qty = sum of weekly batch quantities across BOTH blenders.
+			item.total_qty = sum(
+				flt(item.get(f"w{n}_batch_qty")) + flt(item.get(f"w{n}_batch_qty2"))
+				for n in (1, 2, 3, 4)
 			)
 
 			# Forecast Quantity: total sales-forecast demand (sum of weekly forecast qtys)
@@ -420,30 +419,34 @@ class ForecastClub(Document):
 		return result
 
 	def check_duplicate_items(self):
-		"""Check for duplicate items in the items table"""
+		"""Check for duplicate (item + packed good) rows. The same finished good may appear on
+		multiple rows — one per Packed Good — so uniqueness is on the (item_code, packed_good)
+		pair, not item_code alone."""
 		from frappe import _
 
 		# Skip validation if no items
 		if not self.items:
 			return
 
-		# Dictionary to track item codes with their row numbers
-		item_codes = {}
+		# Track (item_code, packed_good) -> row number
+		seen = {}
 
 		for idx, item in enumerate(self.items, start=1):
 			if not item.item_code:
 				continue
 
-			# Check if item_code already exists
-			if item.item_code in item_codes:
+			key = (item.item_code, item.get("packed_goods") or "")
+			if key in seen:
+				label = frappe.bold(item.item_code) + (
+					_(" (Packed Goods: {0})").format(frappe.bold(item.packed_goods)) if item.get("packed_goods") else ""
+				)
 				frappe.throw(
-					_("Row #{0}: Duplicate item {1}. This item already exists in Row #{2}").format(
-						idx, frappe.bold(item.item_code), item_codes[item.item_code]
+					_("Row #{0}: Duplicate item {1}. This already exists in Row #{2}").format(
+						idx, label, seen[key]
 					)
 				)
 
-			# Store item_code with its row number
-			item_codes[item.item_code] = idx
+			seen[key] = idx
 
 	def validate_plant_items(self):
 		"""Every item must belong to the selected Plant.
@@ -718,35 +721,50 @@ class ForecastClub(Document):
 			frappe.msgprint("No matching Forecast Sales Person records found for the selected date range and company")
 			return
 
-		# Dictionary to aggregate items by item_code
+		# Aggregate by (item_code, packed_good) -> ONE club row per packed good of the same item.
+		#   W_n Packed Goods  = sum of the Sales Persons' packed Week n counts (SF week_1..4)
+		#   Week n Loose Qty  = sum of the Sales Persons' loose material (SF loose_material_week_n,
+		#                       = Filling Capacity x packed count)
 		items_dict = {}
-
-		# Fetch all items from matching forecast documents
 		for doc in forecast_docs:
 			forecast_items = frappe.db.get_all(
 				"Forecast Sales Person Wise Item",
 				filters={"parent": doc.name},
-				fields=["item_code", "item_name", "week_1", "week_2", "week_3", "week_4"]
+				fields=[
+					"item_code", "item_name", "packed_goods", "filling_capacity",
+					"week_1", "week_2", "week_3", "week_4",
+					"loose_material_week_1", "loose_material_week_2",
+					"loose_material_week_3", "loose_material_week_4",
+				],
 			)
 
 			for item in forecast_items:
-				key = item.item_code
+				key = (item.item_code, item.packed_goods or "")
 
 				if key not in items_dict:
 					items_dict[key] = {
 						"item_code": item.item_code,
 						"item_name": item.item_name,
-						"week_1": 0,
-						"week_2": 0,
-						"week_3": 0,
-						"week_4": 0
+						"packed_goods": item.packed_goods,
+						"filling_capacity": flt(item.filling_capacity),
+						"w1_packed_goods": 0, "w2_packed_goods": 0,
+						"w3_packed_goods": 0, "w4_packed_goods": 0,
+						"week_1": 0, "week_2": 0, "week_3": 0, "week_4": 0,
 					}
 
-				# Aggregate weekly quantities
-				items_dict[key]["week_1"] += (item.week_1 or 0)
-				items_dict[key]["week_2"] += (item.week_2 or 0)
-				items_dict[key]["week_3"] += (item.week_3 or 0)
-				items_dict[key]["week_4"] += (item.week_4 or 0)
+				agg = items_dict[key]
+				# Packed-goods counts = Sales Persons' packed Week 1..4
+				agg["w1_packed_goods"] += flt(item.week_1)
+				agg["w2_packed_goods"] += flt(item.week_2)
+				agg["w3_packed_goods"] += flt(item.week_3)
+				agg["w4_packed_goods"] += flt(item.week_4)
+				# Loose quantity = Sales Persons' loose material (Filling Capacity x packed)
+				agg["week_1"] += flt(item.loose_material_week_1)
+				agg["week_2"] += flt(item.loose_material_week_2)
+				agg["week_3"] += flt(item.loose_material_week_3)
+				agg["week_4"] += flt(item.loose_material_week_4)
+				if not agg["filling_capacity"] and flt(item.filling_capacity):
+					agg["filling_capacity"] = flt(item.filling_capacity)
 
 		# Restrict to the selected plant's items (Item.custom_manufacturing_location == plant warehouse)
 		plant_warehouse = get_plant_warehouse(self.plant)
@@ -763,6 +781,7 @@ class ForecastClub(Document):
 		# Items already committed in another club (same month x plant x type) are skipped.
 		locked = self.get_locked_items()
 		skipped = []
+		skipped_codes = set()  # de-dup the skip message across an item's multiple packed-good rows
 
 		# Add aggregated items to the items child table
 		for item_data in items_dict.values():
@@ -776,22 +795,37 @@ class ForecastClub(Document):
 
 			# Skip items already locked in another committed club for an overlapping month
 			if item_data["item_code"] in locked:
-				club, state = locked[item_data["item_code"]]
-				skipped.append((item_data["item_code"], club, state))
+				if item_data["item_code"] not in skipped_codes:
+					skipped_codes.add(item_data["item_code"])
+					club, state = locked[item_data["item_code"]]
+					skipped.append((item_data["item_code"], club, state))
 				continue
 
 			# Get BOM for the item if it exists
 			bom = frappe.db.get_value("BOM", {"item": item_data["item_code"], "is_default": 1, "is_active": 1}, "name")
+
+			# Filling capacity from the packed good item when the SF row didn't carry it.
+			filling_capacity = item_data["filling_capacity"]
+			if not filling_capacity and item_data["packed_goods"]:
+				filling_capacity = flt(
+					frappe.db.get_value("Item", item_data["packed_goods"], "custom_filling_capacity")
+				)
 
 			self.append("items", {
 				"item_code": item_data["item_code"],
 				"item_name": item_data["item_name"],
 				"sales_uom": frappe.db.get_value("Item", item_data["item_code"], "stock_uom"),
 				"bom": bom,
+				"packed_goods": item_data["packed_goods"],
+				"filling_capacity": filling_capacity,
+				"w1_packed_goods": item_data["w1_packed_goods"],
+				"w2_packed_goods": item_data["w2_packed_goods"],
+				"w3_packed_goods": item_data["w3_packed_goods"],
+				"w4_packed_goods": item_data["w4_packed_goods"],
 				"week_1": item_data["week_1"],
 				"week_2": item_data["week_2"],
 				"week_3": item_data["week_3"],
-				"week_4": item_data["week_4"]
+				"week_4": item_data["week_4"],
 			})
 
 		plant_note = f" for {self.plant}" if self.plant else ""

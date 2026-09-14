@@ -9,6 +9,12 @@
   "item_code",
   "sales_uom",
   "item_name",
+  "packed_goods",
+  "filling_capacity",
+  "w1_packed_goods",
+  "w2_packed_goods",
+  "w3_packed_goods",
+  "w4_packed_goods",
   "item_manufacturing_remark",
   "total_batch_qty",
   "column_break_item",
@@ -26,6 +32,13 @@
   "batch_capacity_1",
   "w1_batch",
   "w1_batch_qty",
+  "w1_pkg_qty_b1",
+  "blender2_week_1",
+  "batch_capacity2_1",
+  "w1_batch2",
+  "w1_batch_qty2",
+  "w1_pkg_qty_b2",
+  "enable_blender_2_w1",
   "w1_plan_qty",
   "w1_wo",
   "column_break_ohyy",
@@ -34,6 +47,13 @@
   "batch_capacity_2",
   "w2_batch",
   "w2_batch_qty",
+  "w2_pkg_qty_b1",
+  "blender2_week_2",
+  "batch_capacity2_2",
+  "w2_batch2",
+  "w2_batch_qty2",
+  "w2_pkg_qty_b2",
+  "enable_blender_2_w2",
   "w2_plan_qty",
   "w2_wo",
   "column_break_cbkq",
@@ -42,6 +62,13 @@
   "batch_capacity_3",
   "w3_batch",
   "w3_batch_qty",
+  "w3_pkg_qty_b1",
+  "blender2_week_3",
+  "batch_capacity2_3",
+  "w3_batch2",
+  "w3_batch_qty2",
+  "w3_pkg_qty_b2",
+  "enable_blender_2_w3",
   "w3_plan_qty",
   "w3_wo",
   "column_break_jgmb",
@@ -50,6 +77,13 @@
   "batch_capacity_4",
   "w4_batch",
   "w4_batch_qty",
+  "w4_pkg_qty_b1",
+  "blender2_week_4",
+  "batch_capacity2_4",
+  "w4_batch2",
+  "w4_batch_qty2",
+  "w4_pkg_qty_b2",
+  "enable_blender_2_w4",
   "w4_plan_qty",
   "w4_wo",
   "stocks_section",
@@ -73,14 +107,14 @@
    "options": "Item"
   },
   {
-   "fieldname": "sales_uom",
-   "fieldtype": "Link",
-   "options": "UOM",
-   "label": "Sales UOM",
    "fetch_from": "item_code.stock_uom",
    "fetch_if_empty": 0,
-   "read_only": 1,
-   "in_list_view": 1
+   "fieldname": "sales_uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Sales UOM",
+   "options": "UOM",
+   "read_only": 1
   },
   {
    "columns": 1,
@@ -88,6 +122,51 @@
    "fieldname": "item_name",
    "fieldtype": "Data",
    "label": "Item Name",
+   "read_only": 1
+  },
+  {
+   "description": "Packing material (from the Sales Person forecast). One row per packed good of the same item.",
+   "fieldname": "packed_goods",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Packed Goods",
+   "options": "Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "filling_capacity",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Filling Capacity",
+   "read_only": 1
+  },
+  {
+   "description": "Sum of Week 1 packed-goods counts from all Sales Person forecasts (this item + packed good).",
+   "fieldname": "w1_packed_goods",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "W1 Packed Goods",
+   "read_only": 1
+  },
+  {
+   "fieldname": "w2_packed_goods",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "W2 Packed Goods",
+   "read_only": 1
+  },
+  {
+   "fieldname": "w3_packed_goods",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "W3 Packed Goods",
+   "read_only": 1
+  },
+  {
+   "fieldname": "w4_packed_goods",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "W4 Packed Goods",
    "read_only": 1
   },
   {
@@ -113,7 +192,7 @@
    "fieldname": "week_1",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Week 1",
+   "label": "Week 1 Loose Quantity",
    "non_negative": 1,
    "read_only": 1
   },
@@ -121,7 +200,7 @@
    "columns": 1,
    "fieldname": "w1_batch",
    "fieldtype": "Float",
-   "label": "W1 Batch Size",
+   "label": "Blender 1 W1 No of Batches",
    "non_negative": 1
   },
   {
@@ -140,7 +219,7 @@
    "fieldname": "week_2",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Week 2",
+   "label": "Week 2 Loose Quantity",
    "non_negative": 1,
    "read_only": 1
   },
@@ -148,7 +227,7 @@
    "columns": 1,
    "fieldname": "w2_batch",
    "fieldtype": "Float",
-   "label": "W2 Batch Size",
+   "label": "Blender 1 W2 No of Batches",
    "non_negative": 1
   },
   {
@@ -167,7 +246,7 @@
    "fieldname": "week_3",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Week 3",
+   "label": "Week 3 Loose Quantity",
    "non_negative": 1,
    "read_only": 1
   },
@@ -175,7 +254,7 @@
    "columns": 1,
    "fieldname": "w3_batch",
    "fieldtype": "Float",
-   "label": "W3 Batch Size",
+   "label": "Blender 1 W3 No of Batches",
    "non_negative": 1
   },
   {
@@ -194,7 +273,7 @@
    "fieldname": "week_4",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Week 4",
+   "label": "Week 4 Loose Quantity",
    "non_negative": 1,
    "read_only": 1
   },
@@ -202,7 +281,7 @@
    "columns": 1,
    "fieldname": "w4_batch",
    "fieldtype": "Float",
-   "label": "W4 Batch Size",
+   "label": "Blender 1 W4 No of Batches",
    "non_negative": 1
   },
   {
@@ -311,109 +390,109 @@
   {
    "fieldname": "w1_batch_qty",
    "fieldtype": "Float",
-   "label": "W1 Batch Qty",
+   "label": "Blender 1 W1 Batch Qty",
    "non_negative": 1,
    "read_only": 1
   },
   {
+   "description": "Defaults to the week's Batch Qty; can be reduced (not increased above it).",
    "fieldname": "w1_plan_qty",
    "fieldtype": "Int",
    "label": "W1 Plan Qty",
-   "non_negative": 1,
-   "description": "Defaults to the week's Batch Qty; can be reduced (not increased above it)."
+   "non_negative": 1
   },
   {
    "fieldname": "w2_batch_qty",
    "fieldtype": "Float",
-   "label": "W2 Batch Qty",
+   "label": "Blender 1 W2 Batch Qty",
    "non_negative": 1,
    "read_only": 1
   },
   {
+   "description": "Defaults to the week's Batch Qty; can be reduced (not increased above it).",
    "fieldname": "w2_plan_qty",
    "fieldtype": "Int",
    "label": "W2 Plan Qty",
-   "non_negative": 1,
-   "description": "Defaults to the week's Batch Qty; can be reduced (not increased above it)."
+   "non_negative": 1
   },
   {
    "fieldname": "w3_batch_qty",
    "fieldtype": "Float",
-   "label": "W3 Batch Qty",
+   "label": "Blender 1 W3 Batch Qty",
    "non_negative": 1,
    "read_only": 1
   },
   {
+   "description": "Defaults to the week's Batch Qty; can be reduced (not increased above it).",
    "fieldname": "w3_plan_qty",
    "fieldtype": "Int",
    "label": "W3 Plan Qty",
-   "non_negative": 1,
-   "description": "Defaults to the week's Batch Qty; can be reduced (not increased above it)."
+   "non_negative": 1
   },
   {
    "fieldname": "w4_batch_qty",
    "fieldtype": "Float",
-   "label": "W4 Batch Qty",
+   "label": "Blender 1 W4 Batch Qty",
    "non_negative": 1,
    "read_only": 1
   },
   {
+   "description": "Defaults to the week's Batch Qty; can be reduced (not increased above it).",
    "fieldname": "w4_plan_qty",
    "fieldtype": "Int",
    "label": "W4 Plan Qty",
-   "non_negative": 1,
-   "description": "Defaults to the week's Batch Qty; can be reduced (not increased above it)."
+   "non_negative": 1
   },
   {
    "fieldname": "blender_week_1",
    "fieldtype": "Link",
-   "label": "Blender Week 1",
+   "label": "Blender 1 Week 1",
    "options": "Workstation"
   },
   {
    "fieldname": "blender_week_2",
    "fieldtype": "Link",
-   "label": "Blender Week 2",
+   "label": "Blender 1 Week 2",
    "options": "Workstation"
   },
   {
    "fieldname": "blender_week_3",
    "fieldtype": "Link",
-   "label": "Blender Week 3",
+   "label": "Blender 1 Week 3",
    "options": "Workstation"
   },
   {
    "fieldname": "blender_week_4",
    "fieldtype": "Link",
-   "label": "Blender Week 4",
+   "label": "Blender 1 Week 4",
    "options": "Workstation"
   },
   {
    "fetch_from": "blender_week_1.custom_blender_capacity",
    "fieldname": "batch_capacity_1",
    "fieldtype": "Data",
-   "label": "Batch Capacity 1",
+   "label": "Blender 1 Capacity 1",
    "read_only": 1
   },
   {
    "fetch_from": "blender_week_2.custom_blender_capacity",
    "fieldname": "batch_capacity_2",
    "fieldtype": "Data",
-   "label": "Batch Capacity 2",
+   "label": "Blender 1 Capacity 2",
    "read_only": 1
   },
   {
    "fetch_from": "blender_week_3.custom_blender_capacity",
    "fieldname": "batch_capacity_3",
    "fieldtype": "Data",
-   "label": "Batch Capacity 3",
+   "label": "Blender 1 Capacity 3",
    "read_only": 1
   },
   {
    "fetch_from": "blender_week_4.custom_blender_capacity",
    "fieldname": "batch_capacity_4",
    "fieldtype": "Data",
-   "label": "Batch Capacity 4",
+   "label": "Blender 1 Capacity 4",
    "read_only": 1
   },
   {
@@ -436,6 +515,202 @@
   {
    "fieldname": "column_break_gqcu",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "w1_pkg_qty_b1",
+   "fieldtype": "Float",
+   "label": "Packed Goods Qty Blender 1",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w1",
+   "fieldname": "blender2_week_1",
+   "fieldtype": "Link",
+   "label": "Blender 2 Week 1",
+   "options": "Workstation"
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w1",
+   "fetch_from": "blender2_week_1.custom_blender_capacity",
+   "fieldname": "batch_capacity2_1",
+   "fieldtype": "Data",
+   "label": "Blender 2 Capacity 1",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w1",
+   "fieldname": "w1_batch2",
+   "fieldtype": "Float",
+   "label": "Blender 2 W1 No of Batches",
+   "non_negative": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w1",
+   "fieldname": "w1_batch_qty2",
+   "fieldtype": "Float",
+   "label": "Blender 2 W1 Batch Qty",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w1",
+   "fieldname": "w1_pkg_qty_b2",
+   "fieldtype": "Float",
+   "label": "Packed Goods Qty Blender 2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "w2_pkg_qty_b1",
+   "fieldtype": "Float",
+   "label": "Packed Goods Qty Blender 1",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w2",
+   "fieldname": "blender2_week_2",
+   "fieldtype": "Link",
+   "label": "Blender 2 Week 2",
+   "options": "Workstation"
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w2",
+   "fetch_from": "blender2_week_2.custom_blender_capacity",
+   "fieldname": "batch_capacity2_2",
+   "fieldtype": "Data",
+   "label": "Blender 2 Capacity 2",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w2",
+   "fieldname": "w2_batch2",
+   "fieldtype": "Float",
+   "label": "Blender 2 W2 No of Batches",
+   "non_negative": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w2",
+   "fieldname": "w2_batch_qty2",
+   "fieldtype": "Float",
+   "label": "Blender 2 W2 Batch Qty",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w2",
+   "fieldname": "w2_pkg_qty_b2",
+   "fieldtype": "Float",
+   "label": "Packed Goods Qty Blender 2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "w3_pkg_qty_b1",
+   "fieldtype": "Float",
+   "label": "Packed Goods Qty Blender 1",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w3",
+   "fieldname": "blender2_week_3",
+   "fieldtype": "Link",
+   "label": "Blender 2 Week 3",
+   "options": "Workstation"
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w3",
+   "fetch_from": "blender2_week_3.custom_blender_capacity",
+   "fieldname": "batch_capacity2_3",
+   "fieldtype": "Data",
+   "label": "Blender 2 Capacity 3",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w3",
+   "fieldname": "w3_batch2",
+   "fieldtype": "Float",
+   "label": "Blender 2 W3 No of Batches",
+   "non_negative": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w3",
+   "fieldname": "w3_batch_qty2",
+   "fieldtype": "Float",
+   "label": "Blender 2 W3 Batch Qty",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w3",
+   "fieldname": "w3_pkg_qty_b2",
+   "fieldtype": "Float",
+   "label": "Packed Goods Qty Blender 2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "w4_pkg_qty_b1",
+   "fieldtype": "Float",
+   "label": "Packed Goods Qty Blender 1",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w4",
+   "fieldname": "blender2_week_4",
+   "fieldtype": "Link",
+   "label": "Blender 2 Week 4",
+   "options": "Workstation"
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w4",
+   "fetch_from": "blender2_week_4.custom_blender_capacity",
+   "fieldname": "batch_capacity2_4",
+   "fieldtype": "Data",
+   "label": "Blender 2 Capacity 4",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w4",
+   "fieldname": "w4_batch2",
+   "fieldtype": "Float",
+   "label": "Blender 2 W4 No of Batches",
+   "non_negative": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w4",
+   "fieldname": "w4_batch_qty2",
+   "fieldtype": "Float",
+   "label": "Blender 2 W4 Batch Qty",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_blender_2_w4",
+   "fieldname": "w4_pkg_qty_b2",
+   "fieldtype": "Float",
+   "label": "Packed Goods Qty Blender 2",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_blender_2_w1",
+   "fieldtype": "Check",
+   "label": "Use 2nd Blender"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_blender_2_w2",
+   "fieldtype": "Check",
+   "label": "Use 2nd Blender"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_blender_2_w3",
+   "fieldtype": "Check",
+   "label": "Use 2nd Blender"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_blender_2_w4",
+   "fieldtype": "Check",
+   "label": "Use 2nd Blender"
   }
  ],
  "grid_page_length": 50,
