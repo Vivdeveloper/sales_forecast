@@ -8,6 +8,8 @@
  "field_order": [
   "item_code",
   "sales_uom",
+  "packed_goods",
+  "filling_capacity",
   "item_name",
   "customer",
   "column_break_odxc",
@@ -15,7 +17,21 @@
   "week_2",
   "column_break_lbln",
   "week_3",
-  "week_4"
+  "week_4",
+  "loose_material_week_1",
+  "loose_material_week_2",
+  "loose_material_week_3",
+  "loose_material_week_4",
+  "sales_qty_week_1",
+  "sales_qty_week_2",
+  "sales_qty_week_3",
+  "sales_qty_week_4",
+  "sales_total_qty",
+  "sales_amount_week_1",
+  "sales_amount_week_2",
+  "sales_amount_week_3",
+  "sales_amount_week_4",
+  "total_sales_amount"
  ],
  "fields": [
   {
@@ -34,6 +50,24 @@
    "fetch_if_empty": 0,
    "read_only": 1,
    "in_list_view": 1
+  },
+  {
+   "columns": 2,
+   "description": "Packing material of the selected item (from its Packing Material Details).",
+   "fieldname": "packed_goods",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Packed Goods",
+   "options": "Item"
+  },
+  {
+   "columns": 1,
+   "fetch_if_empty": 0,
+   "fieldname": "filling_capacity",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Filling Capacity",
+   "read_only": 1
   },
   {
    "fetch_from": "item_code.item_name",
@@ -84,6 +118,110 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Week 4"
+  },
+  {
+   "description": "Filling Capacity × Week 1 (auto).",
+   "fieldname": "loose_material_week_1",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Loose Material Week 1",
+   "read_only": 1
+  },
+  {
+   "description": "Filling Capacity × Week 2 (auto).",
+   "fieldname": "loose_material_week_2",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Loose Material Week 2",
+   "read_only": 1
+  },
+  {
+   "description": "Filling Capacity × Week 3 (auto).",
+   "fieldname": "loose_material_week_3",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Loose Material Week 3",
+   "read_only": 1
+  },
+  {
+   "description": "Filling Capacity × Week 4 (auto).",
+   "fieldname": "loose_material_week_4",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Loose Material Week 4",
+   "read_only": 1
+  },
+  {
+   "description": "Last month's sales qty of this item (+customer), week 1 (auto from Sales Invoices).",
+   "fieldname": "sales_qty_week_1",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Sales Qty Week 1",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_qty_week_2",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Sales Qty Week 2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_qty_week_3",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Sales Qty Week 3",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_qty_week_4",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Sales Qty Week 4",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_total_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Sales Total Qty",
+   "read_only": 1
+  },
+  {
+   "description": "Last month's sales amount (without GST) of this item (+customer), week 1 (auto).",
+   "fieldname": "sales_amount_week_1",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Sales Amount Week 1",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_amount_week_2",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Sales Amount Week 2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_amount_week_3",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Sales Amount Week 3",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_amount_week_4",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Sales Amount Week 4",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_sales_amount",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Total Sales Amount",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,

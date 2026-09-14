@@ -7,6 +7,7 @@ frappe.ui.form.on("Forecast Sales Person", {
 		setup_date_filters(frm);
 		setup_item_group_filter(frm);
 		setup_item_customer_filters(frm);
+		setup_packed_goods_filter(frm);
 		show_sales_person_info(frm);
 		apply_week_locks(frm);
 		lock_sales_person_for_current_user(frm);
@@ -79,11 +80,93 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 	items_remove(frm) {
 		render_week_totals(frm);
 	},
-	week_1: (frm) => render_week_totals(frm),
-	week_2: (frm) => render_week_totals(frm),
-	week_3: (frm) => render_week_totals(frm),
-	week_4: (frm) => render_week_totals(frm)
+	// Manual Week N -> recompute that row's Loose Material (= Filling Capacity × Week N).
+	week_1: (frm, cdt, cdn) => { recompute_loose_material(frm, cdt, cdn); render_week_totals(frm); },
+	week_2: (frm, cdt, cdn) => { recompute_loose_material(frm, cdt, cdn); render_week_totals(frm); },
+	week_3: (frm, cdt, cdn) => { recompute_loose_material(frm, cdt, cdn); render_week_totals(frm); },
+	week_4: (frm, cdt, cdn) => { recompute_loose_material(frm, cdt, cdn); render_week_totals(frm); },
+
+	// Filling Capacity changed (e.g. after picking Packed Goods) -> recompute Loose Material.
+	filling_capacity(frm, cdt, cdn) {
+		recompute_loose_material(frm, cdt, cdn);
+	},
+
+	// Changing the item changes which packing materials are valid — clear stale selections,
+	// then pull last month's week-wise sales for the new item.
+	item_code(frm, cdt, cdn) {
+		frappe.model.set_value(cdt, cdn, "packed_goods", null);
+		frappe.model.set_value(cdt, cdn, "filling_capacity", 0);
+		fetch_last_month_sales(frm, cdt, cdn);
+	},
+
+	// Customer scopes the sales history -> refetch.
+	customer(frm, cdt, cdn) {
+		fetch_last_month_sales(frm, cdt, cdn);
+	},
+
+	// Selecting a Packed Goods fetches its Filling Capacity from the item's Packing
+	// Material Details (which then recomputes Loose Material via the filling_capacity event).
+	packed_goods(frm, cdt, cdn) {
+		const row = locals[cdt][cdn];
+		if (!row.item_code || !row.packed_goods) {
+			frappe.model.set_value(cdt, cdn, "filling_capacity", 0);
+			return;
+		}
+		frappe.call({
+			method: "sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person.get_packing_filling_capacity",
+			args: { item_code: row.item_code, packed_goods: row.packed_goods },
+			callback: (r) => frappe.model.set_value(cdt, cdn, "filling_capacity", flt(r.message)),
+		});
+	}
 });
+
+// Loose Material Week N = Filling Capacity × Week N (read-only, auto).
+function recompute_loose_material(frm, cdt, cdn) {
+	const row = locals[cdt][cdn];
+	const fc = flt(row.filling_capacity);
+	[1, 2, 3, 4].forEach((n) => {
+		frappe.model.set_value(cdt, cdn, `loose_material_week_${n}`, fc * flt(row[`week_${n}`]));
+	});
+}
+
+// Pull last month's week-wise Sales Qty + Sales Amount (without GST) for the row's item
+// (+customer) from submitted Sales Invoices, and fill the read-only columns.
+function fetch_last_month_sales(frm, cdt, cdn) {
+	const row = locals[cdt][cdn];
+	if (!row.item_code) return;
+	frappe.call({
+		method: "sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person.get_last_month_sales",
+		args: {
+			item_code: row.item_code,
+			customer: row.customer || "",
+			ref_date: frm.doc.forecast_start_date || frm.doc.posting_date || "",
+			company: frm.doc.company || "",
+		},
+		callback: (r) => {
+			const d = r.message || {};
+			const q = d.qty || {};
+			const a = d.amount || {};
+			[1, 2, 3, 4].forEach((n) => {
+				frappe.model.set_value(cdt, cdn, `sales_qty_week_${n}`, flt(q[n]));
+				frappe.model.set_value(cdt, cdn, `sales_amount_week_${n}`, flt(a[n]));
+			});
+			frappe.model.set_value(cdt, cdn, "sales_total_qty", flt(q.total));
+			frappe.model.set_value(cdt, cdn, "total_sales_amount", flt(a.total));
+		},
+	});
+}
+
+// Restrict the "Packed Goods" dropdown to the packing materials of each row's item
+// (its Item > Packing Material Details tab).
+function setup_packed_goods_filter(frm) {
+	frm.set_query("packed_goods", "items", function (doc, cdt, cdn) {
+		const row = locals[cdt][cdn];
+		return {
+			query: "sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person.packed_goods_query",
+			filters: { item_code: row.item_code || "" },
+		};
+	});
+}
 
 // Show a live, UI-only week-wise total row below the Items table (not a data row).
 // Sums week_1..week_4 across all item rows; shows 0 when there is nothing to add.

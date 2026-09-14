@@ -14,6 +14,35 @@ class ForecastSalesPerson(Document):
 		self.set_monthly_target_totals()
 		self.set_actual_qty()
 		self.set_item_sales_uom()
+		self.set_loose_material()
+		self.set_last_month_sales()
+
+	def set_loose_material(self):
+		"""Loose Material Week N = Filling Capacity × Week N (per item row)."""
+		from frappe.utils import flt
+
+		for row in self.items or []:
+			fc = flt(row.get("filling_capacity"))
+			for n in (1, 2, 3, 4):
+				row.set(f"loose_material_week_{n}", fc * flt(row.get(f"week_{n}")))
+
+	def set_last_month_sales(self):
+		"""Populate each row's week-wise Sales Qty and Sales Amount (without GST) from LAST
+		MONTH's submitted Sales Invoices for that item (+customer). 'Last month' = the calendar
+		month before the forecast start date."""
+		from frappe.utils import flt
+
+		ref = self.forecast_start_date or self.posting_date
+		for row in self.items or []:
+			if not row.item_code:
+				continue
+			data = get_last_month_sales(row.item_code, row.customer, ref, self.company)
+			q, a = data["qty"], data["amount"]
+			for n in (1, 2, 3, 4):
+				row.set(f"sales_qty_week_{n}", flt(q.get(str(n))))
+				row.set(f"sales_amount_week_{n}", flt(a.get(str(n))))
+			row.sales_total_qty = flt(q.get("total"))
+			row.total_sales_amount = flt(a.get("total"))
 
 	def set_item_sales_uom(self):
 		"""Fill each item's Sales UOM from the item master (this bench labels
@@ -162,6 +191,101 @@ class ForecastSalesPerson(Document):
 def get_current_user_sales_person():
 	"""Return the Sales Person linked (via Sales Person.custom_user) to the logged-in user, if any."""
 	return frappe.db.get_value("Sales Person", {"custom_user": frappe.session.user}, "name")
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def packed_goods_query(doctype, txt, searchfield, start, page_len, filters):
+	"""Link-field query for a forecast item's "Packed Goods": returns the packed-goods Items
+	whose "Finished Item" (Item.custom_finished_item) is the selected forecast item. Each
+	option shows the packed-goods item code + name."""
+	item_code = (filters or {}).get("item_code")
+	if not item_code:
+		return []
+
+	like = "%%%s%%" % (txt or "")
+	return frappe.db.sql(
+		"""
+		SELECT name, item_name FROM `tabItem`
+		WHERE custom_finished_item = %(fi)s AND IFNULL(disabled, 0) = 0
+		  AND (name LIKE %(txt)s OR item_name LIKE %(txt)s)
+		ORDER BY name
+		LIMIT %(start)s, %(page_len)s
+		""",
+		{"fi": item_code, "txt": like, "start": start, "page_len": page_len},
+	)
+
+
+def _week_of_month(day):
+	"""Week bucket within a month: 1 -> days 1-7, 2 -> 8-14, 3 -> 15-21, 4 -> 22+."""
+	if day <= 7:
+		return 1
+	if day <= 14:
+		return 2
+	if day <= 21:
+		return 3
+	return 4
+
+
+@frappe.whitelist()
+def get_last_month_sales(item_code, customer=None, ref_date=None, company=None):
+	"""Week-wise Sales Qty and Sales Amount (WITHOUT GST) for `item_code` (+optional customer)
+	from LAST MONTH's submitted Sales Invoices. 'Last month' = the calendar month before
+	`ref_date` (the forecast start date). Qty is in stock UOM; amount is base_net_amount
+	(net of taxes/GST, company currency). Returns {"qty": {..,"total"}, "amount": {..,"total"}}."""
+	from frappe.utils import getdate, nowdate, add_months, get_first_day, get_last_day, flt
+
+	empty = {
+		"qty": {"1": 0, "2": 0, "3": 0, "4": 0, "total": 0},
+		"amount": {"1": 0, "2": 0, "3": 0, "4": 0, "total": 0},
+	}
+	if not item_code:
+		return empty
+
+	ref = getdate(ref_date) if ref_date else getdate(nowdate())
+	last = add_months(ref, -1)
+	start, end = get_first_day(last), get_last_day(last)
+
+	conds = ["si.docstatus = 1", "sii.item_code = %(item)s", "si.posting_date BETWEEN %(start)s AND %(end)s"]
+	params = {"item": item_code, "start": start, "end": end}
+	if customer:
+		conds.append("si.customer = %(customer)s")
+		params["customer"] = customer
+	if company:
+		conds.append("si.company = %(company)s")
+		params["company"] = company
+
+	rows = frappe.db.sql(
+		"""
+		SELECT si.posting_date AS posting_date, sii.stock_qty AS qty, sii.base_net_amount AS amt
+		FROM `tabSales Invoice Item` sii
+		INNER JOIN `tabSales Invoice` si ON si.name = sii.parent
+		WHERE {conds}
+		""".format(conds=" AND ".join(conds)),
+		params,
+		as_dict=True,
+	)
+
+	qty = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
+	amt = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
+	for r in rows:
+		wk = _week_of_month(getdate(r.posting_date).day)
+		qty[wk] += flt(r.qty)
+		amt[wk] += flt(r.amt)
+
+	return {
+		"qty": {"1": qty[1], "2": qty[2], "3": qty[3], "4": qty[4], "total": sum(qty.values())},
+		"amount": {"1": amt[1], "2": amt[2], "3": amt[3], "4": amt[4], "total": sum(amt.values())},
+	}
+
+
+@frappe.whitelist()
+def get_packing_filling_capacity(item_code, packed_goods):
+	"""Filling Capacity of the chosen Packed Goods = that packed-goods Item's own Filling
+	Capacity (Item.custom_filling_capacity, shown below its Description)."""
+	if not packed_goods:
+		return 0
+	return frappe.db.get_value("Item", packed_goods, "custom_filling_capacity") or 0
 
 
 MONTH_NAMES = [
