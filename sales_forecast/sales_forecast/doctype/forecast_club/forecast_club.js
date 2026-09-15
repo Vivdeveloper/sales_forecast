@@ -24,6 +24,16 @@ frappe.ui.form.on("Forecast Club", {
 	refresh(frm) {
 		render_club_week_totals(frm);
 		add_forecast_status_button(frm);
+		// Live-refresh W1..W4 WO when a linked Work Order is submitted/cancelled elsewhere
+		// (the server updates the field + publishes this event). Bound once per form.
+		if (!frm._wo_live_bound) {
+			frm._wo_live_bound = true;
+			frappe.realtime.on("forecast_club_wo_updated", (data) => {
+				if (data && data.name === frm.doc.name && !frm.is_dirty()) {
+					frm.reload_doc();
+				}
+			});
+		}
 		// Ensure grid docfield formatter is set (backup for format wrap above)
 		const packaging_formatter = function (value) {
 			if (value == null || value === "") return value;
@@ -156,43 +166,43 @@ frappe.ui.form.on("Forecast Club", {
 	},
 
 	get_fetch_material_request_item(frm) {
+		// The server method mutates material_request_items and syncs them back to the
+		// in-memory doc only — so it MUST be persisted, otherwise the fetched raw-material
+		// list is silently lost when the user leaves without saving. Save it right after a
+		// successful fetch (kept in the sequential doc-call chain so no concurrent sync
+		// clobbers it). Return the promise so the chain waits for the save to finish.
 		queue_doc_call(() => frm.call({
 			method: 'fetch_material_request_items',
 			doc: frm.doc,
 			freeze: true,
 			freeze_message: __('Fetching material request items...'),
-			callback: function(r) {
-				console.log(r);
-				if (!r.exc && r.message) {
-					frm.refresh_field('material_request_items');
+		}).then((r) => {
+			if (r.exc || !r.message) return;
+			frm.refresh_field('material_request_items');
 
-					if (r.message.status === 'error') {
-						frappe.msgprint({
-							title: __('Error'),
-							indicator: 'red',
-							message: r.message.message
-						});
-					} 
-					// else {
-					// 	frm.save().then(() => {
-					// 		// Show success message
-					// 		frappe.show_alert({
-					// 			message: __(r.message.message || 'Material Request Items fetched successfully'),
-					// 			indicator: 'green'
-					// 		});
-
-					// 		// Show warning if any items don't have BOM
-					// 		if (r.message.warning) {
-					// 			frappe.msgprint({
-					// 				title: __('Warning'),
-					// 				indicator: 'orange',
-					// 				message: r.message.warning
-					// 			});
-					// 		}
-					// 	});
-					// }
-				}
+			if (r.message.status === 'error') {
+				frappe.msgprint({ title: __('Error'), indicator: 'red', message: r.message.message });
+				return;
 			}
+
+			// Persist the fetched list so it survives navigation / reload.
+			return frm.save().then(() => {
+				frappe.show_alert({
+					message: __(r.message.message || 'Material Request Items fetched and saved.'),
+					indicator: 'green',
+				});
+				if (r.message.warning) {
+					frappe.msgprint({ title: __('Warning'), indicator: 'orange', message: r.message.warning });
+				}
+			}).catch((e) => {
+				// Don't lose the fetched rows on a save error — tell the user to Save manually.
+				frappe.msgprint({
+					title: __('Not Saved'),
+					indicator: 'red',
+					message: __('Material Request Items were fetched but could not be saved automatically. Please click Save. ({0})',
+						[(e && e.message) || __('validation error')]),
+				});
+			});
 		}));
 	},
 
@@ -766,10 +776,10 @@ function show_work_order_dialog(frm) {
 function show_items_selection_dialog(frm, selected_week) {
 	// Map week display name to field names
 	const week_map = {
-		'Week 1': { week_field: 'week_1', batch_field: 'w1_batch', batch_qty_field: 'w1_batch_qty', wo_field: 'w1_wo', batch_capacity_field: 'batch_capacity_1' },
-		'Week 2': { week_field: 'week_2', batch_field: 'w2_batch', batch_qty_field: 'w2_batch_qty', wo_field: 'w2_wo', batch_capacity_field: 'batch_capacity_2' },
-		'Week 3': { week_field: 'week_3', batch_field: 'w3_batch', batch_qty_field: 'w3_batch_qty', wo_field: 'w3_wo', batch_capacity_field: 'batch_capacity_3' },
-		'Week 4': { week_field: 'week_4', batch_field: 'w4_batch', batch_qty_field: 'w4_batch_qty', wo_field: 'w4_wo', batch_capacity_field: 'batch_capacity_4' }
+		'Week 1': { n: 1, week_field: 'week_1', batch_field: 'w1_batch', batch_qty_field: 'w1_batch_qty', wo_field: 'w1_wo', batch_capacity_field: 'batch_capacity_1' },
+		'Week 2': { n: 2, week_field: 'week_2', batch_field: 'w2_batch', batch_qty_field: 'w2_batch_qty', wo_field: 'w2_wo', batch_capacity_field: 'batch_capacity_2' },
+		'Week 3': { n: 3, week_field: 'week_3', batch_field: 'w3_batch', batch_qty_field: 'w3_batch_qty', wo_field: 'w3_wo', batch_capacity_field: 'batch_capacity_3' },
+		'Week 4': { n: 4, week_field: 'week_4', batch_field: 'w4_batch', batch_qty_field: 'w4_batch_qty', wo_field: 'w4_wo', batch_capacity_field: 'batch_capacity_4' }
 	};
 
 	const week_data = week_map[selected_week];
@@ -785,10 +795,11 @@ function show_items_selection_dialog(frm, selected_week) {
 			if (!r.exc && r.message) {
 				let wo_summary = r.message;
 
-				// Filter items that have batch quantity for this week
+				// Filter items that have batch quantity for this week (either blender).
 				let items_with_batch = frm.doc.items.filter(item => {
-					let batch_qty = item[week_data.batch_qty_field] || 0;
-					return batch_qty > 0 && item.item_code && item.bom;
+					let b1 = flt(item[week_data.batch_qty_field]);
+					let b2 = flt(item['w' + week_data.n + '_batch_qty2']);
+					return (b1 > 0 || b2 > 0) && item.item_code && item.bom;
 				});
 
 				if (items_with_batch.length === 0) {
@@ -804,25 +815,52 @@ function show_items_selection_dialog(frm, selected_week) {
 
 function show_items_table(frm, selected_week, week_data, items_with_batch, wo_summary) {
 
-	// Prepare items data for child table
-	let items_data = items_with_batch.map(item => {
-		let batch_count = item[week_data.batch_field] || 0;
-		// let batch_size = item.batch_size || 0;
-		let wo_created = wo_summary[item.item_code] || 0;
-		let remaining_batches = batch_count - wo_created;
+	// One row PER BLENDER for the week: Blender 1 always, Blender 2 when it's enabled for
+	// this week. Each row carries the packed good, its filling capacity, and the total qty
+	// to produce (packed) = that blender's loose batch qty / filling capacity.
+	const n = week_data.n;
+	let items_data = [];
+	items_with_batch.forEach(item => {
+		const wo_created = wo_summary[item.item_code] || 0;
+		const fc = flt(item.filling_capacity);
 
-		return {
-			item_code: item.item_code,
-			item_name: item.item_name || '',
-			// batch_size: batch_size,
-			// "Batch Quantity" column shows this week's Batch Capacity (batch_capacity_N)
-			batch_capacity: item[week_data.batch_capacity_field] || 0,
-			total_batches: batch_count,
-			wo_created: wo_created,
-			remaining_batches: remaining_batches,
-			batches_to_create: 0,
-			forecast_club_item: item.name
-		};
+		// Blender 1
+		const b1_batches = flt(item[week_data.batch_field]);
+		if (b1_batches > 0 || flt(item[week_data.batch_qty_field]) > 0) {
+			items_data.push({
+				item_code: item.item_code,
+				item_name: item.item_name || '',
+				blender: 'Blender 1',
+				packed_goods: item.packed_goods || '',
+				filling_capacity: fc,
+				batch_capacity: item[week_data.batch_capacity_field] || 0,
+				produce_qty: flt(item['w' + n + '_pkg_qty_b1']),
+				total_batches: b1_batches,
+				wo_created: wo_created,
+				remaining_batches: b1_batches - wo_created,
+				batches_to_create: 0,
+				forecast_club_item: item.name
+			});
+		}
+
+		// Blender 2 (only if enabled for this week)
+		if (item['enable_blender_2_w' + n] && flt(item['w' + n + '_batch2']) > 0) {
+			const b2_batches = flt(item['w' + n + '_batch2']);
+			items_data.push({
+				item_code: item.item_code,
+				item_name: item.item_name || '',
+				blender: 'Blender 2',
+				packed_goods: item.packed_goods || '',
+				filling_capacity: fc,
+				batch_capacity: item['batch_capacity2_' + n] || 0,
+				produce_qty: flt(item['w' + n + '_pkg_qty_b2']),
+				total_batches: b2_batches,
+				wo_created: 0,
+				remaining_batches: b2_batches,
+				batches_to_create: 0,
+				forecast_club_item: item.name
+			});
+		}
 	});
 
 	let items_dialog = new frappe.ui.Dialog({
@@ -846,28 +884,50 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 						label: __('Item Code'),
 						in_list_view: 1,
 						read_only: 1,
-						columns: 2
+						columns: 1
 					},
 					{
 						fieldtype: 'Data',
 						fieldname: 'item_name',
 						label: __('Item Name'),
+						read_only: 1
+					},
+					{
+						fieldtype: 'Data',
+						fieldname: 'blender',
+						label: __('Blender'),
+						in_list_view: 1,
+						read_only: 1,
+						columns: 1
+					},
+					{
+						fieldtype: 'Data',
+						fieldname: 'packed_goods',
+						label: __('Packed Good Material'),
 						in_list_view: 1,
 						read_only: 1,
 						columns: 2
 					},
-					// {
-					// 	fieldtype: 'Float',
-					// 	fieldname: 'batch_size',
-					// 	label: __('Batch Size'),
-					// 	in_list_view: 1,
-					// 	read_only: 1,
-					// 	columns: 1
-					// },
+					{
+						fieldtype: 'Float',
+						fieldname: 'filling_capacity',
+						label: __('Filling Capacity'),
+						in_list_view: 1,
+						read_only: 1,
+						columns: 1
+					},
 					{
 						fieldtype: 'Data',
 						fieldname: 'batch_capacity',
 						label: __('Batch Quantity'),
+						in_list_view: 1,
+						read_only: 1,
+						columns: 1
+					},
+					{
+						fieldtype: 'Float',
+						fieldname: 'produce_qty',
+						label: __('Total Qty to Produce'),
 						in_list_view: 1,
 						read_only: 1,
 						columns: 1
@@ -883,9 +943,7 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 						fieldtype: 'Int',
 						fieldname: 'total_batches',
 						label: __('Total Batches'),
-						in_list_view: 1,
-						read_only: 1,
-						columns: 1
+						read_only: 1
 					},
 					{
 						fieldtype: 'Int',
@@ -952,7 +1010,11 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 						item_code: row.item_code,
 						// "Batch Quantity" column holds this week's batch capacity -> WO qty per batch
 						batch_size: flt(row.batch_capacity),
-						batches: batches
+						batches: batches,
+						// Carried onto each created Work Order (per blender).
+						packed_goods: row.packed_goods || null,
+						filling_capacity: flt(row.filling_capacity),
+						blender_packed_qty: flt(row.produce_qty)
 					});
 				}
 			});

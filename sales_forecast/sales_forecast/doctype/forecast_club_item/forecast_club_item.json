@@ -11,10 +11,6 @@
   "item_name",
   "packed_goods",
   "filling_capacity",
-  "w1_packed_goods",
-  "w2_packed_goods",
-  "w3_packed_goods",
-  "w4_packed_goods",
   "item_manufacturing_remark",
   "total_batch_qty",
   "column_break_item",
@@ -26,6 +22,14 @@
   "last_month_sales",
   "planned_quantity",
   "plan_status",
+  "sec_pg_weekly",
+  "w1_packed_goods",
+  "cb_pg2",
+  "w2_packed_goods",
+  "cb_pg3",
+  "w3_packed_goods",
+  "cb_pg4",
+  "w4_packed_goods",
   "column_break_pspq",
   "week_1",
   "blender_week_1",
@@ -711,6 +715,23 @@
    "fieldname": "enable_blender_2_w4",
    "fieldtype": "Check",
    "label": "Use 2nd Blender"
+  },
+  {
+   "fieldname": "sec_pg_weekly",
+   "fieldtype": "Section Break",
+   "label": "Packed Goods Forecast (Weekly)"
+  },
+  {
+   "fieldname": "cb_pg2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cb_pg3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cb_pg4",
+   "fieldtype": "Column Break"
   }
  ],
  "grid_page_length": 50,

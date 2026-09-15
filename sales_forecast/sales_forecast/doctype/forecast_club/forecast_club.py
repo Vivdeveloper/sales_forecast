@@ -1196,6 +1196,11 @@ def create_work_orders_batch_wise(forecast_club, week, items):
 		if not fc_item:
 			continue
 
+		# Packed-goods details for this blender row (carried onto every WO it creates).
+		packed_goods = item_data.get("packed_goods") or fc_item.get("packed_goods")
+		filling_capacity = flt(item_data.get("filling_capacity")) or flt(fc_item.get("filling_capacity"))
+		blender_packed_qty = flt(item_data.get("blender_packed_qty"))
+
 		# Create multiple Work Orders - one for each batch
 		for batch_number in range(1, batches_to_create + 1):
 			try:
@@ -1209,6 +1214,9 @@ def create_work_orders_batch_wise(forecast_club, week, items):
 					"custom_forecast_club": fc_doc.name,
 					"custom_forecast_club_item": fc_item.name,
 					"custom_weekly": week,
+					"custom_packed_goods": packed_goods,
+					"custom_filling_capacity": filling_capacity,
+					"custom_blender_packed_qty": blender_packed_qty,
 					"fg_warehouse": fc_doc.set_warehouse if fc_doc.set_warehouse else None,
 					"wip_warehouse": fc_doc.set_warehouse if fc_doc.set_warehouse else None,
 				})
@@ -1270,6 +1278,20 @@ def _update_forecast_club_status_on_mr_cancel_or_delete(doc):
 			frappe.log_error(f"Error updating Forecast Club {fc_name}: {str(e)}")
 
 
+def _notify_club_wo_update(club_name):
+	"""Tell an open Forecast Club form to reload so the W1..W4 WO figures update live
+	(instead of only after a manual page refresh)."""
+	if not club_name:
+		return
+	frappe.publish_realtime(
+		"forecast_club_wo_updated",
+		{"name": club_name},
+		doctype="Forecast Club",
+		docname=club_name,
+		after_commit=True,
+	)
+
+
 def on_work_order_submit(doc, method):
 	"""Update Forecast Club item's weekly work order count when Work Order is submitted"""
 	if not doc.custom_forecast_club or not doc.custom_forecast_club_item:
@@ -1321,7 +1343,7 @@ def on_work_order_submit(doc, method):
 					new_wo_qty or 0
 				)
 
-				frappe.msgprint(f"Updated Forecast Club {doc.custom_forecast_club}: {wo_field} = {new_wo_qty}")
+				_notify_club_wo_update(doc.custom_forecast_club)
 				break
 
 	except Exception as e:
@@ -1379,7 +1401,7 @@ def on_work_order_cancel(doc, method):
 					new_wo_qty or 0
 				)
 
-				frappe.msgprint(f"Updated Forecast Club {doc.custom_forecast_club}: {wo_field} = {new_wo_qty}")
+				_notify_club_wo_update(doc.custom_forecast_club)
 				break
 
 	except Exception as e:
