@@ -276,6 +276,41 @@ def get_packing_filling_capacity(item_code, packed_goods):
 	return frappe.db.get_value("Item", packed_goods, "custom_filling_capacity") or 0
 
 
+@frappe.whitelist()
+def get_standard_selling_price(item_code):
+	"""Return the Standard Selling price for the Miscellaneous Customer flow. `item_code`
+	is the PACKED GOOD item (its Item Price carries Rate Per Unit + Rate; the main item's
+	price list does not). The "Standard Selling" price list is only the FILTER used to pick
+	the right Item Price. Returns {"rate_per_unit": .., "rate": ..} (latest valid_from)."""
+	from frappe.utils import flt
+
+	empty = {"rate_per_unit": 0, "rate": 0}
+	if not item_code:
+		return empty
+
+	def _latest(filters):
+		rows = frappe.get_all(
+			"Item Price",
+			filters=filters,
+			fields=["custom_rate_per_unit", "price_list_rate"],
+			order_by="valid_from desc, modified desc",
+			limit=1,
+		)
+		return rows[0] if rows else None
+
+	# 1) Prefer the "Standard Selling" price list explicitly; else any selling price list.
+	row = _latest({"item_code": item_code, "price_list": "Standard Selling", "selling": 1})
+	if not row:
+		row = _latest({"item_code": item_code, "selling": 1})
+
+	if not row:
+		return empty
+	return {
+		"rate_per_unit": flt(row.get("custom_rate_per_unit")),
+		"rate": flt(row.get("price_list_rate")),
+	}
+
+
 MONTH_NAMES = [
 	"January", "February", "March", "April", "May", "June",
 	"July", "August", "September", "October", "November", "December",

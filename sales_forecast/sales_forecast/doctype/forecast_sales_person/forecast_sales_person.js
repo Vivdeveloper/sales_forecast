@@ -97,11 +97,19 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 		frappe.model.set_value(cdt, cdn, "packed_goods", null);
 		frappe.model.set_value(cdt, cdn, "filling_capacity", 0);
 		fetch_last_month_sales(frm, cdt, cdn);
+		// If Miscellaneous Customer is already ticked, refresh its Standard Selling price.
+		fetch_misc_customer_price(frm, cdt, cdn);
 	},
 
 	// Customer scopes the sales history -> refetch.
 	customer(frm, cdt, cdn) {
 		fetch_last_month_sales(frm, cdt, cdn);
+	},
+
+	// Miscellaneous Customer: on tick, activate + fill Price List and Rate Per Unit from the
+	// item's Standard Selling Item Price; on untick, clear them.
+	miscellaneous_customer(frm, cdt, cdn) {
+		fetch_misc_customer_price(frm, cdt, cdn);
 	},
 
 	// Selecting a Packed Goods fetches its Filling Capacity from the item's Packing
@@ -117,6 +125,8 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 			args: { item_code: row.item_code, packed_goods: row.packed_goods },
 			callback: (r) => frappe.model.set_value(cdt, cdn, "filling_capacity", flt(r.message)),
 		});
+		// Packed good drives the Standard Selling Rate/Rate Per Unit for Misc Customer.
+		fetch_misc_customer_price(frm, cdt, cdn);
 	}
 });
 
@@ -126,6 +136,27 @@ function recompute_loose_material(frm, cdt, cdn) {
 	const fc = flt(row.filling_capacity);
 	[1, 2, 3, 4].forEach((n) => {
 		frappe.model.set_value(cdt, cdn, `loose_material_week_${n}`, fc * flt(row[`week_${n}`]));
+	});
+}
+
+// Miscellaneous Customer flow: when ticked, fill the row's Rate Per Unit + Rate from the
+// PACKED GOOD's Standard Selling Item Price (the price list is only the filter, and only the
+// packed-good price carries Rate Per Unit); on untick (or no packed good), clear.
+function fetch_misc_customer_price(frm, cdt, cdn) {
+	const row = locals[cdt][cdn];
+	if (!row.miscellaneous_customer || !row.packed_goods) {
+		frappe.model.set_value(cdt, cdn, "rate_per_unit", 0);
+		frappe.model.set_value(cdt, cdn, "rate", 0);
+		return;
+	}
+	frappe.call({
+		method: "sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person.get_standard_selling_price",
+		args: { item_code: row.packed_goods },
+		callback: (r) => {
+			const d = r.message || {};
+			frappe.model.set_value(cdt, cdn, "rate_per_unit", flt(d.rate_per_unit));
+			frappe.model.set_value(cdt, cdn, "rate", flt(d.rate));
+		},
 	});
 }
 

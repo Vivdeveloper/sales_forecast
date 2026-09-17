@@ -191,37 +191,6 @@
    "translatable": 0,
    "unique": 0,
    "width": null
-  },
-  {
-   "dt": "Work Order",
-   "fieldname": "custom_packed_goods",
-   "fieldtype": "Link",
-   "insert_after": "custom_forecast_club_item",
-   "label": "Packed Goods",
-   "module": null,
-   "name": "Work Order-custom_packed_goods",
-   "options": "Item",
-   "read_only": 1
-  },
-  {
-   "dt": "Work Order",
-   "fieldname": "custom_filling_capacity",
-   "fieldtype": "Float",
-   "insert_after": "custom_packed_goods",
-   "label": "Filling Capacity of Packed Goods",
-   "module": null,
-   "name": "Work Order-custom_filling_capacity",
-   "read_only": 1
-  },
-  {
-   "dt": "Work Order",
-   "fieldname": "custom_blender_packed_qty",
-   "fieldtype": "Float",
-   "insert_after": "custom_filling_capacity",
-   "label": "Packed Qty of Blender",
-   "module": null,
-   "name": "Work Order-custom_blender_packed_qty",
-   "read_only": 1
   }
  ],
  "custom_perms": [],

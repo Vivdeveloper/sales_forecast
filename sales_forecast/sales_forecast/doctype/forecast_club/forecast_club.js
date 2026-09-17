@@ -373,6 +373,7 @@ frappe.ui.form.on("Forecast Club Item", {
 				frappe.model.set_value(cdt, cdn, `${wk}_plan_qty`, total);
 			}
 		});
+		render_packed_goods_weekly(frm, cdt, cdn);
 	},
 
 	item_code(frm, cdt, cdn) {
@@ -464,6 +465,66 @@ frappe.ui.form.on("Forecast Club Item", {
 	items_add(frm) { render_club_week_totals(frm); },
 	items_remove(frm) { render_club_week_totals(frm); }
 });
+
+// Render the per-packed-good weekly PACKED-quantity table into the row form's HTML field.
+// Data comes from custom_packed_goods_weekly_data (JSON built at fetch time). Clubbing is on
+// the main item, so this keeps the packed-good breakdown visible without extra columns.
+function render_packed_goods_weekly(frm, cdt, cdn) {
+	const row = locals[cdt][cdn];
+	const grid_row = frm.fields_dict.items
+		&& frm.fields_dict.items.grid
+		&& frm.fields_dict.items.grid.grid_rows_by_docname
+		&& frm.fields_dict.items.grid.grid_rows_by_docname[cdn];
+	if (!grid_row || !grid_row.grid_form) return;
+	const field = grid_row.grid_form.fields_dict.custom_packed_goods_weekly;
+	if (!field || !field.$wrapper) return;
+
+	let data = [];
+	try { data = JSON.parse(row.custom_packed_goods_weekly_data || "[]") || []; } catch (e) { data = []; }
+
+	let html;
+	if (!data.length) {
+		html = `<div class="text-muted" style="padding:4px 0;">${__("No packed-goods forecast for this item.")}</div>`;
+	} else {
+		const fmt = (v) => frappe.format(flt(v), { fieldtype: "Float" });
+		const esc = (v) => frappe.utils.escape_html(v || "");
+		const th = (label, right) =>
+			`<th class="${right ? "text-right" : ""}" style="padding:4px 8px;">${label}</th>`;
+		const td = (val, right) =>
+			`<td class="${right ? "text-right" : ""}" style="padding:4px 8px;">${val}</td>`;
+
+		const fg = esc(row.item_code || "");
+		let bodyRows = data.map((d, i) => {
+			// FG (main item) shown only once, spanning all packed-good rows.
+			const fgCell = i === 0
+				? `<td rowspan="${data.length}" style="padding:4px 8px;vertical-align:middle;font-weight:600;">${fg}</td>`
+				: "";
+			return `<tr>
+				${fgCell}
+				${td(esc(d.item_name || d.packed_good))}
+				${td(fmt(d.filling_capacity), true)}
+				${td(esc(d.packing_material))}
+				${td(fmt(d.qty_sf), true)}
+				${td(fmt(d.source_qty), true)}
+				${td(`<b>${fmt(d.mr_qty)}</b>`, true)}
+			</tr>`;
+		}).join("");
+
+		html = `<table class="table table-bordered" style="margin:0;font-size:12px;">
+				<thead><tr style="background:#f0f0f0;">
+					${th(__("FG"))}
+					${th(__("Packed Good (SF)"))}
+					${th(__("Filling Capacity"), true)}
+					${th(__("Packing Material"))}
+					${th(__("Qty (SF)"), true)}
+					${th(__("Pack Qty in Source"), true)}
+					${th(__("MR Qty"), true)}
+				</tr></thead>
+				<tbody>${bodyRows}</tbody>
+			</table>`;
+	}
+	field.$wrapper.html(html);
+}
 
 function validate_week_batch_relationship(frm, cdt, cdn, week_field, batch_field, week_label) {
 	let row = locals[cdt][cdn];
@@ -609,7 +670,6 @@ function calculate_totals(frm, cdt, cdn) {
 	let row = locals[cdt][cdn];
 	if (!row) return;
 
-	const fc = flt(row.filling_capacity);
 	let total_batches = 0, total_qty = 0;
 
 	[1, 2, 3, 4].forEach((n) => {
@@ -620,9 +680,6 @@ function calculate_totals(frm, cdt, cdn) {
 		const b2q = b2 ? flt(row['batch_capacity2_' + n]) * flt(row['w' + n + '_batch2']) : 0;
 		frappe.model.set_value(cdt, cdn, 'w' + n + '_batch_qty', b1q);
 		frappe.model.set_value(cdt, cdn, 'w' + n + '_batch_qty2', b2q);
-		// Packed Goods Qty per blender = loose batch qty / filling capacity.
-		frappe.model.set_value(cdt, cdn, 'w' + n + '_pkg_qty_b1', fc ? b1q / fc : 0);
-		frappe.model.set_value(cdt, cdn, 'w' + n + '_pkg_qty_b2', fc ? b2q / fc : 0);
 		// Plan Qty defaults to that week's TOTAL batch qty (both blenders); the user may reduce it.
 		frappe.model.set_value(cdt, cdn, 'w' + n + '_plan_qty', b1q + b2q);
 		total_batches += flt(row['w' + n + '_batch']) + (b2 ? flt(row['w' + n + '_batch2']) : 0);
@@ -816,13 +873,12 @@ function show_items_selection_dialog(frm, selected_week) {
 function show_items_table(frm, selected_week, week_data, items_with_batch, wo_summary) {
 
 	// One row PER BLENDER for the week: Blender 1 always, Blender 2 when it's enabled for
-	// this week. Each row carries the packed good, its filling capacity, and the total qty
-	// to produce (packed) = that blender's loose batch qty / filling capacity.
+	// this week. Each row carries the total qty to produce (loose) = that blender's loose
+	// batch qty (No of Batches x Blender Capacity).
 	const n = week_data.n;
 	let items_data = [];
 	items_with_batch.forEach(item => {
 		const wo_created = wo_summary[item.item_code] || 0;
-		const fc = flt(item.filling_capacity);
 
 		// Blender 1
 		const b1_batches = flt(item[week_data.batch_field]);
@@ -831,10 +887,8 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 				item_code: item.item_code,
 				item_name: item.item_name || '',
 				blender: 'Blender 1',
-				packed_goods: item.packed_goods || '',
-				filling_capacity: fc,
 				batch_capacity: item[week_data.batch_capacity_field] || 0,
-				produce_qty: flt(item['w' + n + '_pkg_qty_b1']),
+				produce_qty: flt(item[week_data.batch_qty_field]),
 				total_batches: b1_batches,
 				wo_created: wo_created,
 				remaining_batches: b1_batches - wo_created,
@@ -850,10 +904,8 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 				item_code: item.item_code,
 				item_name: item.item_name || '',
 				blender: 'Blender 2',
-				packed_goods: item.packed_goods || '',
-				filling_capacity: fc,
 				batch_capacity: item['batch_capacity2_' + n] || 0,
-				produce_qty: flt(item['w' + n + '_pkg_qty_b2']),
+				produce_qty: flt(item['w' + n + '_batch_qty2']),
 				total_batches: b2_batches,
 				wo_created: 0,
 				remaining_batches: b2_batches,
@@ -896,22 +948,6 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 						fieldtype: 'Data',
 						fieldname: 'blender',
 						label: __('Blender'),
-						in_list_view: 1,
-						read_only: 1,
-						columns: 1
-					},
-					{
-						fieldtype: 'Data',
-						fieldname: 'packed_goods',
-						label: __('Packed Good Material'),
-						in_list_view: 1,
-						read_only: 1,
-						columns: 2
-					},
-					{
-						fieldtype: 'Float',
-						fieldname: 'filling_capacity',
-						label: __('Filling Capacity'),
 						in_list_view: 1,
 						read_only: 1,
 						columns: 1
@@ -1010,11 +1046,7 @@ function show_items_table(frm, selected_week, week_data, items_with_batch, wo_su
 						item_code: row.item_code,
 						// "Batch Quantity" column holds this week's batch capacity -> WO qty per batch
 						batch_size: flt(row.batch_capacity),
-						batches: batches,
-						// Carried onto each created Work Order (per blender).
-						packed_goods: row.packed_goods || null,
-						filling_capacity: flt(row.filling_capacity),
-						blender_packed_qty: flt(row.produce_qty)
+						batches: batches
 					});
 				}
 			});

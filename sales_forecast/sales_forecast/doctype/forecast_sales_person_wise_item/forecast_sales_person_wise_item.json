@@ -12,7 +12,10 @@
   "filling_capacity",
   "cb_hdr",
   "item_name",
+  "miscellaneous_customer",
   "customer",
+  "rate_per_unit",
+  "rate",
   "sec_forecast",
   "week_1",
   "cb_f2",
@@ -94,11 +97,38 @@
    "read_only": 1
   },
   {
+   "columns": 1,
+   "default": "0",
+   "description": "Tick for a one-off / miscellaneous customer. Fills Price List + Rate Per Unit from the item's Standard Selling price.",
+   "fieldname": "miscellaneous_customer",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Miscellaneous Customer"
+  },
+  {
    "fieldname": "customer",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Customer",
    "options": "Customer"
+  },
+  {
+   "columns": 1,
+   "description": "Rate Per Unit from the item's Standard Selling Item Price (auto).",
+   "fieldname": "rate_per_unit",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Rate Per Unit",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "description": "Rate from the item's Standard Selling Item Price (auto).",
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Rate",
+   "read_only": 1
   },
   {
    "columns": 1,

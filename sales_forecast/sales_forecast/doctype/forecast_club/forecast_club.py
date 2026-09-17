@@ -1,6 +1,8 @@
 # Copyright (c) 2026, Viv Choudhary and contributors
 # For license information, please see license.txt
 
+import json
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -127,7 +129,6 @@ class ForecastClub(Document):
 	def before_save(self):
 		"""Calculate totals for each item and set custom_company_stock, custom_item_packaging_material"""
 		for item in self.items:
-			fc = flt(item.get("filling_capacity"))
 			for n in (1, 2, 3, 4):
 				# 2nd blender is enabled PER WEEK via its own checkbox.
 				use_b2 = bool(item.get(f"enable_blender_2_w{n}"))
@@ -136,9 +137,6 @@ class ForecastClub(Document):
 				b2_qty = (flt(item.get(f"w{n}_batch2")) * flt(item.get(f"batch_capacity2_{n}"))) if use_b2 else 0
 				item.set(f"w{n}_batch_qty", b1_qty)
 				item.set(f"w{n}_batch_qty2", b2_qty)
-				# Packed Goods Qty per blender = loose Batch Qty / Filling Capacity.
-				item.set(f"w{n}_pkg_qty_b1", (b1_qty / fc) if fc else 0)
-				item.set(f"w{n}_pkg_qty_b2", (b2_qty / fc) if fc else 0)
 				# Plan Qty defaults to the week's TOTAL batch qty (Blender 1 + Blender 2);
 				# reduce-only, clamped to [0, total] (also enforced here for API/import safety).
 				total = b1_qty + b2_qty
@@ -218,6 +216,29 @@ class ForecastClub(Document):
 					item.custom_item_packaging_material = packaging_value
 				if hasattr(item, "custom__item_packaging_material"):
 					item.custom__item_packaging_material = packaging_value
+
+			# Refresh the packing-material popup table's Pack Qty (Source) + MR Qty from the
+			# current Set Warehouse, so they stay live when stock / warehouse changes.
+			if item.get("custom_packed_goods_weekly_data"):
+				try:
+					pk_rows = json.loads(item.custom_packed_goods_weekly_data) or []
+				except (ValueError, TypeError):
+					pk_rows = []
+				if pk_rows:
+					self._enrich_packing_rows(pk_rows)
+					item.custom_packed_goods_weekly_data = json.dumps(pk_rows)
+
+	def _enrich_packing_rows(self, rows):
+		"""Fill each packed-good row with Pack Qty in the club's Set Warehouse and the
+		resulting MR Qty = max(0, Qty SF − Pack Qty in Source). Uses the current
+		set_warehouse; recomputed on every save."""
+		wh = self.get("set_warehouse")
+		for r in rows:
+			pm = r.get("packing_material")
+			src = flt(self._get_item_stock_in_warehouse(pm, wh)) if (pm and wh) else 0
+			r["source_qty"] = src
+			r["mr_qty"] = max(0.0, flt(r.get("qty_sf")) - src)
+		return rows
 
 	def _get_item_stock_in_all_companies(self, item_code):
 		"""Return total stock for item across all companies (sum of actual_qty in all warehouses)."""
@@ -419,30 +440,26 @@ class ForecastClub(Document):
 		return result
 
 	def check_duplicate_items(self):
-		"""Check for duplicate (item + packed good) rows. The same finished good may appear on
-		multiple rows — one per Packed Good — so uniqueness is on the (item_code, packed_good)
-		pair, not item_code alone."""
+		"""Check for duplicate item rows. Clubbing is on the main (finished) item, so each
+		item may appear only once — uniqueness is on item_code."""
 		from frappe import _
 
 		# Skip validation if no items
 		if not self.items:
 			return
 
-		# Track (item_code, packed_good) -> row number
+		# Track item_code -> row number
 		seen = {}
 
 		for idx, item in enumerate(self.items, start=1):
 			if not item.item_code:
 				continue
 
-			key = (item.item_code, item.get("packed_goods") or "")
+			key = item.item_code
 			if key in seen:
-				label = frappe.bold(item.item_code) + (
-					_(" (Packed Goods: {0})").format(frappe.bold(item.packed_goods)) if item.get("packed_goods") else ""
-				)
 				frappe.throw(
 					_("Row #{0}: Duplicate item {1}. This already exists in Row #{2}").format(
-						idx, label, seen[key]
+						idx, frappe.bold(item.item_code), seen[key]
 					)
 				)
 
@@ -721,10 +738,11 @@ class ForecastClub(Document):
 			frappe.msgprint("No matching Forecast Sales Person records found for the selected date range and company")
 			return
 
-		# Aggregate by (item_code, packed_good) -> ONE club row per packed good of the same item.
-		#   W_n Packed Goods  = sum of the Sales Persons' packed Week n counts (SF week_1..4)
+		# Clubbing is on the MAIN (finished) item -> ONE club row per item_code.
 		#   Week n Loose Qty  = sum of the Sales Persons' loose material (SF loose_material_week_n,
-		#                       = Filling Capacity x packed count)
+		#                       = Filling Capacity x packed count), across ALL packed goods.
+		#   packed[]          = per-packed-good weekly PACKED counts (SF week_1..4) for the item,
+		#                       stored as JSON and shown as a table (custom_packed_goods_weekly).
 		items_dict = {}
 		for doc in forecast_docs:
 			forecast_items = frappe.db.get_all(
@@ -739,32 +757,45 @@ class ForecastClub(Document):
 			)
 
 			for item in forecast_items:
-				key = (item.item_code, item.packed_goods or "")
+				key = item.item_code
 
 				if key not in items_dict:
 					items_dict[key] = {
 						"item_code": item.item_code,
 						"item_name": item.item_name,
-						"packed_goods": item.packed_goods,
-						"filling_capacity": flt(item.filling_capacity),
-						"w1_packed_goods": 0, "w2_packed_goods": 0,
-						"w3_packed_goods": 0, "w4_packed_goods": 0,
 						"week_1": 0, "week_2": 0, "week_3": 0, "week_4": 0,
+						"packed": {},  # packed_good -> {name, w1..w4 packed counts}
 					}
 
 				agg = items_dict[key]
-				# Packed-goods counts = Sales Persons' packed Week 1..4
-				agg["w1_packed_goods"] += flt(item.week_1)
-				agg["w2_packed_goods"] += flt(item.week_2)
-				agg["w3_packed_goods"] += flt(item.week_3)
-				agg["w4_packed_goods"] += flt(item.week_4)
 				# Loose quantity = Sales Persons' loose material (Filling Capacity x packed)
 				agg["week_1"] += flt(item.loose_material_week_1)
 				agg["week_2"] += flt(item.loose_material_week_2)
 				agg["week_3"] += flt(item.loose_material_week_3)
 				agg["week_4"] += flt(item.loose_material_week_4)
-				if not agg["filling_capacity"] and flt(item.filling_capacity):
-					agg["filling_capacity"] = flt(item.filling_capacity)
+
+				# Per-packed-good packing-material requirement (for the popup table).
+				#   qty_sf = total forecast packed units for this packed good (this item only).
+				pg = item.packed_goods or ""
+				if pg:
+					pk = agg["packed"].get(pg)
+					if not pk:
+						pg_info = frappe.db.get_value(
+							"Item", pg,
+							["item_name", "custom_filling_capacity", "custom_packing_material"],
+							as_dict=True,
+						) or {}
+						pk = {
+							"packed_good": pg,
+							"item_name": pg_info.get("item_name") or pg,
+							"filling_capacity": flt(pg_info.get("custom_filling_capacity")) or flt(item.filling_capacity),
+							"packing_material": pg_info.get("custom_packing_material") or "",
+							"qty_sf": 0,
+						}
+						agg["packed"][pg] = pk
+					pk["qty_sf"] += (
+						flt(item.week_1) + flt(item.week_2) + flt(item.week_3) + flt(item.week_4)
+					)
 
 		# Restrict to the selected plant's items (Item.custom_manufacturing_location == plant warehouse)
 		plant_warehouse = get_plant_warehouse(self.plant)
@@ -804,28 +835,20 @@ class ForecastClub(Document):
 			# Get BOM for the item if it exists
 			bom = frappe.db.get_value("BOM", {"item": item_data["item_code"], "is_default": 1, "is_active": 1}, "name")
 
-			# Filling capacity from the packed good item when the SF row didn't carry it.
-			filling_capacity = item_data["filling_capacity"]
-			if not filling_capacity and item_data["packed_goods"]:
-				filling_capacity = flt(
-					frappe.db.get_value("Item", item_data["packed_goods"], "custom_filling_capacity")
-				)
+			# Per-packed-good packing-material requirement -> JSON for the popup table.
+			packed_rows = sorted(item_data["packed"].values(), key=lambda r: r["packed_good"])
+			self._enrich_packing_rows(packed_rows)
 
 			self.append("items", {
 				"item_code": item_data["item_code"],
 				"item_name": item_data["item_name"],
 				"sales_uom": frappe.db.get_value("Item", item_data["item_code"], "stock_uom"),
 				"bom": bom,
-				"packed_goods": item_data["packed_goods"],
-				"filling_capacity": filling_capacity,
-				"w1_packed_goods": item_data["w1_packed_goods"],
-				"w2_packed_goods": item_data["w2_packed_goods"],
-				"w3_packed_goods": item_data["w3_packed_goods"],
-				"w4_packed_goods": item_data["w4_packed_goods"],
 				"week_1": item_data["week_1"],
 				"week_2": item_data["week_2"],
 				"week_3": item_data["week_3"],
 				"week_4": item_data["week_4"],
+				"custom_packed_goods_weekly_data": json.dumps(packed_rows),
 			})
 
 		plant_note = f" for {self.plant}" if self.plant else ""
@@ -1196,11 +1219,6 @@ def create_work_orders_batch_wise(forecast_club, week, items):
 		if not fc_item:
 			continue
 
-		# Packed-goods details for this blender row (carried onto every WO it creates).
-		packed_goods = item_data.get("packed_goods") or fc_item.get("packed_goods")
-		filling_capacity = flt(item_data.get("filling_capacity")) or flt(fc_item.get("filling_capacity"))
-		blender_packed_qty = flt(item_data.get("blender_packed_qty"))
-
 		# Create multiple Work Orders - one for each batch
 		for batch_number in range(1, batches_to_create + 1):
 			try:
@@ -1214,9 +1232,6 @@ def create_work_orders_batch_wise(forecast_club, week, items):
 					"custom_forecast_club": fc_doc.name,
 					"custom_forecast_club_item": fc_item.name,
 					"custom_weekly": week,
-					"custom_packed_goods": packed_goods,
-					"custom_filling_capacity": filling_capacity,
-					"custom_blender_packed_qty": blender_packed_qty,
 					"fg_warehouse": fc_doc.set_warehouse if fc_doc.set_warehouse else None,
 					"wip_warehouse": fc_doc.set_warehouse if fc_doc.set_warehouse else None,
 				})
