@@ -62,14 +62,14 @@
    "options": "Item"
   },
   {
-   "fieldname": "sales_uom",
-   "fieldtype": "Link",
-   "options": "UOM",
-   "label": "Sales UOM",
    "fetch_from": "item_code.stock_uom",
    "fetch_if_empty": 0,
-   "read_only": 1,
-   "in_list_view": 1
+   "fieldname": "sales_uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Sales UOM",
+   "options": "UOM",
+   "read_only": 1
   },
   {
    "columns": 2,
@@ -103,14 +103,16 @@
    "fieldname": "miscellaneous_customer",
    "fieldtype": "Check",
    "in_list_view": 1,
-   "label": "Miscellaneous Customer"
+   "label": "Miscellaneous Customer",
+   "read_only_depends_on": "eval:doc.customer"
   },
   {
    "fieldname": "customer",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Customer",
-   "options": "Customer"
+   "options": "Customer",
+   "read_only_depends_on": "eval:doc.miscellaneous_customer"
   },
   {
    "columns": 1,

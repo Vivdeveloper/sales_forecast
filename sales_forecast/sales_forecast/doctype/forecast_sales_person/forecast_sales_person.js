@@ -101,14 +101,28 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 		fetch_misc_customer_price(frm, cdt, cdn);
 	},
 
-	// Customer scopes the sales history -> refetch.
+	// Customer scopes the sales history -> refetch. Customer and Miscellaneous Customer are
+	// mutually exclusive: picking a Customer clears + disables the Misc flag.
 	customer(frm, cdt, cdn) {
+		const row = locals[cdt][cdn];
+		if (row.customer && row.miscellaneous_customer) {
+			frappe.model.set_value(cdt, cdn, "miscellaneous_customer", 0);
+			// misc got cleared -> also clear its auto-filled price fields
+			frappe.model.set_value(cdt, cdn, "rate_per_unit", 0);
+			frappe.model.set_value(cdt, cdn, "rate", 0);
+		}
+		enforce_customer_exclusivity(frm);
 		fetch_last_month_sales(frm, cdt, cdn);
 	},
 
-	// Miscellaneous Customer: on tick, activate + fill Price List and Rate Per Unit from the
-	// item's Standard Selling Item Price; on untick, clear them.
+	// Miscellaneous Customer: on tick, fill Rate/Rate Per Unit from the item's Standard
+	// Selling price. Mutually exclusive with Customer: ticking it clears + disables Customer.
 	miscellaneous_customer(frm, cdt, cdn) {
+		const row = locals[cdt][cdn];
+		if (row.miscellaneous_customer && row.customer) {
+			frappe.model.set_value(cdt, cdn, "customer", "");
+		}
+		enforce_customer_exclusivity(frm);
 		fetch_misc_customer_price(frm, cdt, cdn);
 	},
 
@@ -129,6 +143,12 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 		fetch_misc_customer_price(frm, cdt, cdn);
 	}
 });
+
+// Re-render the Items grid so each row's read_only_depends_on (Customer <-> Miscellaneous
+// Customer mutual exclusion) is re-evaluated and the disabled cell reflects the current row.
+function enforce_customer_exclusivity(frm) {
+	frm.refresh_field("items");
+}
 
 // Loose Material Week N = Filling Capacity × Week N (read-only, auto).
 function recompute_loose_material(frm, cdt, cdn) {

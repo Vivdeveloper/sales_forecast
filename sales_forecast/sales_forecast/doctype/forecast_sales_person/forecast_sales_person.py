@@ -154,6 +154,23 @@ class ForecastSalesPerson(Document):
 		if not self.items:
 			frappe.throw(_("Please add at least one item in the ForecastSalesPerson Items table"))
 
+		# Each row must identify a customer: either a real Customer OR the Miscellaneous
+		# Customer flag (the two are mutually exclusive in the UI). Neither set = invalid.
+		missing_customer = [
+			idx
+			for idx, item in enumerate(self.items, start=1)
+			if item.get("item_code")
+			and not item.get("customer")
+			and not item.get("miscellaneous_customer")
+		]
+		if missing_customer:
+			frappe.throw(
+				_(
+					"Set a <b>Customer</b> or tick <b>Miscellaneous Customer</b> on row(s): {0}."
+				).format(", ".join(str(i) for i in missing_customer)),
+				title=_("Customer Required"),
+			)
+
 		seen = {}
 		for idx, item in enumerate(self.items, start=1):
 			# Skip duplicate checks when item_code is blank (item_code has no validation)
