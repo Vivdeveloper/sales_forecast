@@ -72,11 +72,13 @@ frappe.ui.form.on("Forecast Club", {
 			if (!item_code) {
 				return { filters: [["name", "=", "__never__"]] };
 			}
-			// 3-element filters: Frappe adds doctype when building query
+			// 3-element filters: Frappe adds doctype when building query.
+			// Only Approved (submitted) BOMs that are also Active.
 			return {
 				filters: [
 					["item", "=", item_code],
-					["docstatus", "=", 1]
+					["docstatus", "=", 1],
+					["is_active", "=", 1]
 				]
 			};
 		};
