@@ -101,6 +101,24 @@ frappe.ui.form.on("Forecast Club", {
 			}
 			return { filters: { custom_manufacturing_location: warehouse } };
 		});
+
+		// Blender dropdowns: only show Workstations (blenders) of the selected Plant
+		// (Workstation.custom_plant == this Forecast Club's Plant). No Plant chosen
+		// yet -> show all.
+		const blender_fields = [
+			"blender_week_1", "blender_week_2", "blender_week_3", "blender_week_4",
+			"blender2_week_1", "blender2_week_2", "blender2_week_3", "blender2_week_4",
+		];
+		const blender_query = function () {
+			if (frm.doc.plant) {
+				return { filters: { custom_plant: frm.doc.plant } };
+			}
+			return {};
+		};
+		blender_fields.forEach(function (f) {
+			frm.set_query(f, "items", blender_query);
+		});
+
 		// Apply BOM query and focus handler so we know which row's item_code to use
 		function apply_bom_query_to_rows() {
 			if (!grid || !grid.grid_rows) return;
