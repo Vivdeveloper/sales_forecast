@@ -1421,3 +1421,111 @@ def on_work_order_cancel(doc, method):
 
 	except Exception as e:
 		frappe.log_error(f"Error updating Forecast Club {doc.custom_forecast_club}: {str(e)}")
+
+
+@frappe.whitelist()
+def get_pack_fg_clubbing(start_date, end_date, company):
+	"""Pack FG view: club all submitted Forecast Sales Person items in the period by
+	(FG item, pack size / Filling Capacity), summing the week-wise PACKED counts across
+	every sales person, and show the ACTUAL packed qty per week from submitted "Packing"
+	Stock Entries.
+
+	Row key = (item_code, filling_capacity). For each row:
+	  * fc_w1..fc_w4      -> forecast packed counts (sum of Sales Persons' week_1..4)
+	  * actual_w1..actual_w4 -> sum of finished packed-good qty from Packing Stock Entries,
+	                            bucketed by week-of-month of the entry's posting date.
+
+	Actual matching: a Packing SE's finished packed-good item carries "Finished Item"
+	(=FG, Item.custom_finished_item) and "Filling Capacity" (=pack size,
+	Item.custom_filling_capacity); that maps each entry to a (FG, pack size) row.
+	Weeks use the same buckets as Forecast Sales Person (day 1-7, 8-14, 15-21, 22+).
+	"""
+	from sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person import (
+		_week_of_month,
+	)
+
+	if not (start_date and end_date and company):
+		frappe.throw(_("Forecast Start Date, End Date and Company are required."))
+
+	def _blank():
+		return {
+			"item_code": None, "item_name": None, "filling_capacity": 0,
+			"fc_w1": 0, "fc_w2": 0, "fc_w3": 0, "fc_w4": 0,
+			"actual_w1": 0, "actual_w2": 0, "actual_w3": 0, "actual_w4": 0,
+		}
+
+	rows = {}
+
+	# ---- 1) Forecast: club Sales Person items by (item, pack size) ----
+	# Overlap match (start <= period_end AND end >= period_start), so a monthly period
+	# derived from a Pack FG posting date still catches Sales Person docs whose range is
+	# a partial month (e.g. 2nd-30th).
+	sp_docs = frappe.get_all(
+		"Forecast Sales Person",
+		filters={
+			"forecast_start_date": ["<=", end_date],
+			"forecast_end_date": [">=", start_date],
+			"company": company,
+			"docstatus": 1,
+		},
+		pluck="name",
+	)
+	if sp_docs:
+		for it in frappe.get_all(
+			"Forecast Sales Person Wise Item",
+			filters={"parent": ["in", sp_docs]},
+			fields=[
+				"item_code", "item_name", "filling_capacity",
+				"week_1", "week_2", "week_3", "week_4",
+			],
+		):
+			fc = flt(it.filling_capacity)
+			key = (it.item_code, fc)
+			r = rows.setdefault(key, _blank())
+			r["item_code"] = it.item_code
+			r["item_name"] = r["item_name"] or it.item_name
+			r["filling_capacity"] = fc
+			r["fc_w1"] += flt(it.week_1)
+			r["fc_w2"] += flt(it.week_2)
+			r["fc_w3"] += flt(it.week_3)
+			r["fc_w4"] += flt(it.week_4)
+
+	# ---- 2) Actual: packed qty from submitted "Packing" Stock Entries ----
+	se_rows = frappe.db.sql(
+		"""
+		select sed.item_code as packed_good, sed.qty as qty, se.posting_date as posting_date
+		from `tabStock Entry Detail` sed
+		join `tabStock Entry` se on se.name = sed.parent
+		where se.docstatus = 1
+		  and se.stock_entry_type = 'Packing'
+		  and sed.is_finished_item = 1
+		  and se.company = %s
+		  and se.posting_date between %s and %s
+		""",
+		(company, start_date, end_date),
+		as_dict=True,
+	)
+	pg_cache = {}
+	for si in se_rows:
+		pg = si.packed_good
+		if pg not in pg_cache:
+			pg_cache[pg] = frappe.db.get_value(
+				"Item", pg, ["custom_finished_item", "custom_filling_capacity"], as_dict=True
+			) or {}
+		info = pg_cache[pg]
+		fg = info.get("custom_finished_item")
+		if not fg:
+			continue
+		fc = flt(info.get("custom_filling_capacity"))
+		key = (fg, fc)
+		r = rows.setdefault(key, _blank())
+		if not r["item_code"]:
+			r["item_code"] = fg
+			r["filling_capacity"] = fc
+			r["item_name"] = r["item_name"] or frappe.db.get_value("Item", fg, "item_name")
+		wk = _week_of_month(getdate(si.posting_date).day)
+		r["actual_w%d" % wk] += flt(si.qty)
+
+	# drop blank rows (Sales Person items with no item), stable order by item then pack size
+	result = [r for r in rows.values() if r["item_code"]]
+	return sorted(result, key=lambda x: (x["item_code"] or "", flt(x["filling_capacity"])))
