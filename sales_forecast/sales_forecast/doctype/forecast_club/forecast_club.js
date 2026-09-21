@@ -397,6 +397,62 @@ function fetch_sales_forecasts_if_dates_set(frm) {
 	return Promise.resolve();
 }
 
+// Colour-code the Production Plan fields in the row editor so Quantities, Batch counts
+// and Blenders are easy to tell apart at a glance:
+//   Blenders (Workstation)      -> blue
+//   No. of Batches              -> green
+//   Quantities (loose/batch/plan) -> amber
+const PLAN_FIELD_COLORS = [
+	{
+		color: "#e7f0fd",
+		fields: [
+			"blender_week_1", "blender_week_2", "blender_week_3", "blender_week_4",
+			"blender2_week_1", "blender2_week_2", "blender2_week_3", "blender2_week_4",
+		],
+	},
+	{
+		color: "#e6f4ea",
+		fields: [
+			"w1_batch", "w2_batch", "w3_batch", "w4_batch",
+			"w1_batch2", "w2_batch2", "w3_batch2", "w4_batch2",
+		],
+	},
+	{
+		color: "#fff4e5",
+		fields: [
+			"week_1", "week_2", "week_3", "week_4",
+			"w1_batch_qty", "w2_batch_qty", "w3_batch_qty", "w4_batch_qty",
+			"w1_batch_qty2", "w2_batch_qty2", "w3_batch_qty2", "w4_batch_qty2",
+			"w1_plan_qty", "w2_plan_qty", "w3_plan_qty", "w4_plan_qty",
+			"total_batch_qty",
+		],
+	},
+];
+
+function color_production_plan_fields(frm, cdt, cdn) {
+	const grid = frm.fields_dict.items && frm.fields_dict.items.grid;
+	const grid_row = grid && grid.grid_rows_by_docname && grid.grid_rows_by_docname[cdn];
+	const apply = () => {
+		const fd = grid_row && grid_row.grid_form && grid_row.grid_form.fields_dict;
+		if (!fd) return;
+		PLAN_FIELD_COLORS.forEach((group) => {
+			group.fields.forEach((fn) => {
+				const f = fd[fn];
+				if (f && f.$wrapper) {
+					f.$wrapper.css({
+						"background-color": group.color,
+						"border-radius": "6px",
+						padding: "4px 6px",
+					});
+				}
+			});
+		});
+	};
+	apply();
+	// The grid form may finish rendering a tick later — re-apply once.
+	setTimeout(apply, 50);
+}
+
 frappe.ui.form.on("Forecast Club Item", {
 	// When a row editor opens, default each week's Plan Qty to its Batch Qty if
 	// it is still unset (0). Per-row and non-intrusive — does not touch the whole grid.
@@ -410,6 +466,7 @@ frappe.ui.form.on("Forecast Club Item", {
 			}
 		});
 		render_packed_goods_weekly(frm, cdt, cdn);
+		color_production_plan_fields(frm, cdt, cdn);
 	},
 
 	item_code(frm, cdt, cdn) {
