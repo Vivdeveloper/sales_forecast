@@ -247,6 +247,13 @@ frappe.ui.form.on("Forecast Club", {
 		// The warehouse is set *after* the fetch response lands -- see queue_doc_call().
 		fetch_sales_forecasts_if_dates_set(frm);
 		queue_doc_call(() => set_warehouse_for_plant(frm));
+	},
+
+	forecast_type(frm) {
+		// Toggling Normal <-> Special changes which items are clubbed (Normal excludes
+		// items already committed in another Normal club for the same plant/month;
+		// Special is allowed to repeat). Re-fetch so the Items table reflects the toggle.
+		fetch_sales_forecasts_if_dates_set(frm);
 	}
 });
 
@@ -359,24 +366,33 @@ function warn_zero_capacity_or_batch_qty(frm) {
 function fetch_sales_forecasts_if_dates_set(frm) {
 	// Only fetch if all required fields are set (plant drives item filtering)
 	if (frm.doc.forecast_start_date && frm.doc.forecast_end_date && frm.doc.company && frm.doc.plant) {
-		return queue_doc_call(() => frm.call({
-			method: 'fetch_sales_forecasts',
-			doc: frm.doc,
-			freeze: true,
-			freeze_message: __('Fetching sales forecasts...'),
-			callback: function(r) {
-				if (!r.exc) {
-					frm.refresh_field('items');
-					render_club_week_totals(frm);
-					// Fetch stock + packing (loose qty) for the freshly fetched rows
-					refresh_all_rows_stock(frm);
-					frappe.show_alert({
-						message: __('Sales Forecasts fetched successfully'),
-						indicator: 'green'
-					});
+		return queue_doc_call(() => {
+			// Clear the Items table on the client BEFORE re-fetching. Once the doc is
+			// dirty (after the first plant / forecast-type change), Frappe's child-table
+			// sync leaves the previous rows in place, so a plant/type switch would
+			// ACCUMULATE both sets. Starting from an empty table means only the freshly
+			// fetched, plant/type-filtered rows render every time.
+			frm.clear_table('items');
+			frm.refresh_field('items');
+			return frm.call({
+				method: 'fetch_sales_forecasts',
+				doc: frm.doc,
+				freeze: true,
+				freeze_message: __('Fetching sales forecasts...'),
+				callback: function(r) {
+					if (!r.exc) {
+						frm.refresh_field('items');
+						render_club_week_totals(frm);
+						// Fetch stock + packing (loose qty) for the freshly fetched rows
+						refresh_all_rows_stock(frm);
+						frappe.show_alert({
+							message: __('Sales Forecasts fetched successfully'),
+							indicator: 'green'
+						});
+					}
 				}
-			}
-		}));
+			});
+		});
 	}
 	return Promise.resolve();
 }
