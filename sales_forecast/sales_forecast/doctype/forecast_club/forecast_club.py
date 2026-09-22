@@ -1450,6 +1450,7 @@ def get_pack_fg_clubbing(start_date, end_date, company):
 	def _blank():
 		return {
 			"item_code": None, "item_name": None, "filling_capacity": 0,
+			"packed_good": None, "packed_good_name": None,
 			"fc_w1": 0, "fc_w2": 0, "fc_w3": 0, "fc_w4": 0,
 			"actual_w1": 0, "actual_w2": 0, "actual_w3": 0, "actual_w4": 0,
 		}
@@ -1475,7 +1476,7 @@ def get_pack_fg_clubbing(start_date, end_date, company):
 			"Forecast Sales Person Wise Item",
 			filters={"parent": ["in", sp_docs]},
 			fields=[
-				"item_code", "item_name", "filling_capacity",
+				"item_code", "item_name", "filling_capacity", "packed_goods",
 				"week_1", "week_2", "week_3", "week_4",
 			],
 		):
@@ -1485,6 +1486,10 @@ def get_pack_fg_clubbing(start_date, end_date, company):
 			r["item_code"] = it.item_code
 			r["item_name"] = r["item_name"] or it.item_name
 			r["filling_capacity"] = fc
+			# Packed good (the packing item, e.g. "COROSEAL1090 LUBECOGREENCAN26").
+			if it.packed_goods and not r["packed_good"]:
+				r["packed_good"] = it.packed_goods
+				r["packed_good_name"] = frappe.db.get_value("Item", it.packed_goods, "item_name") or it.packed_goods
 			r["fc_w1"] += flt(it.week_1)
 			r["fc_w2"] += flt(it.week_2)
 			r["fc_w3"] += flt(it.week_3)
@@ -1523,6 +1528,10 @@ def get_pack_fg_clubbing(start_date, end_date, company):
 			r["item_code"] = fg
 			r["filling_capacity"] = fc
 			r["item_name"] = r["item_name"] or frappe.db.get_value("Item", fg, "item_name")
+		# Packed good = the SE's finished item (e.g. "COROSEAL1090 LUBECOGREENCAN26").
+		if not r["packed_good"]:
+			r["packed_good"] = pg
+			r["packed_good_name"] = frappe.db.get_value("Item", pg, "item_name") or pg
 		wk = _week_of_month(getdate(si.posting_date).day)
 		r["actual_w%d" % wk] += flt(si.qty)
 
