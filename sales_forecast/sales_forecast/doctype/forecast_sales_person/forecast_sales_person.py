@@ -336,6 +336,55 @@ def get_standard_selling_price(item_code):
 	}
 
 
+@frappe.whitelist()
+def get_customer_item_rate(item_code, customer=None):
+	"""Rate Per Unit + Rate for a forecast row, keyed off the PACKED GOOD's Item Price.
+	`item_code` is the PACKED GOOD item (its Item Price carries Rate Per Unit + Rate).
+	Preference order:
+	  1. A "Customer Special" price-list Item Price for THIS customer (selling), else
+	  2. The "Standard Selling" price list (the company rate), else
+	  3. Nothing found -> return {} and the caller leaves the row's fields as-is.
+	Returns {"rate_per_unit": .., "rate": ..} or {}."""
+	from frappe.utils import flt
+
+	if not item_code:
+		return {}
+
+	def _latest(filters):
+		rows = frappe.get_all(
+			"Item Price",
+			filters=filters,
+			fields=["custom_rate_per_unit", "price_list_rate"],
+			order_by="valid_from desc, modified desc",
+			limit=1,
+		)
+		return rows[0] if rows else None
+
+	row = None
+	# 1) Customer-specific "Customer Special" price for the selected customer.
+	if customer:
+		row = _latest(
+			{
+				"item_code": item_code,
+				"price_list": "Customer Special",
+				"customer": customer,
+				"selling": 1,
+			}
+		)
+	# 2) Fall back to the company rate = "Standard Selling" price list.
+	if not row:
+		row = _latest({"item_code": item_code, "price_list": "Standard Selling", "selling": 1})
+
+	# 3) Nothing found -> caller keeps existing values.
+	if not row:
+		return {}
+
+	return {
+		"rate_per_unit": flt(row.get("custom_rate_per_unit")),
+		"rate": flt(row.get("price_list_rate")),
+	}
+
+
 MONTH_NAMES = [
 	"January", "February", "March", "April", "May", "June",
 	"July", "August", "September", "October", "November", "December",

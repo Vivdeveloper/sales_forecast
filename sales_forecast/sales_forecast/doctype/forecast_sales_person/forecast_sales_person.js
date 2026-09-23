@@ -113,6 +113,8 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 		}
 		enforce_customer_exclusivity(frm);
 		fetch_last_month_sales(frm, cdt, cdn);
+		// Customer drives Rate Per Unit + Rate (Customer Special -> Standard Selling).
+		fetch_customer_rate(frm, cdt, cdn);
 	},
 
 	// Miscellaneous Customer: on tick, fill Rate/Rate Per Unit from the item's Standard
@@ -143,6 +145,8 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 		fetch_misc_customer_price(frm, cdt, cdn);
 		// Sales/pipeline history is keyed off the packed good -> (re)pull it now.
 		fetch_last_month_sales(frm, cdt, cdn);
+		// Rate Per Unit + Rate also come from the packed good's Item Price (per customer).
+		fetch_customer_rate(frm, cdt, cdn);
 	}
 });
 
@@ -176,6 +180,27 @@ function fetch_misc_customer_price(frm, cdt, cdn) {
 		args: { item_code: row.packed_goods },
 		callback: (r) => {
 			const d = r.message || {};
+			frappe.model.set_value(cdt, cdn, "rate_per_unit", flt(d.rate_per_unit));
+			frappe.model.set_value(cdt, cdn, "rate", flt(d.rate));
+		},
+	});
+}
+
+// Fill the row's Rate Per Unit + Rate from the PACKED GOOD's Item Price, based on the
+// selected Customer: prefer that customer's "Customer Special" price, else fall back to
+// "Standard Selling" (the company rate). If neither exists, leave the fields as-is. Live.
+// (The Miscellaneous Customer flow has its own Standard-Selling fetch — skip it here.)
+function fetch_customer_rate(frm, cdt, cdn) {
+	const row = locals[cdt][cdn];
+	if (row.miscellaneous_customer) return;
+	if (!row.packed_goods) return;
+	frappe.call({
+		method: "sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person.get_customer_item_rate",
+		args: { item_code: row.packed_goods, customer: row.customer || "" },
+		callback: (r) => {
+			const d = r.message || {};
+			// Nothing found -> keep whatever is already there.
+			if (d.rate_per_unit === undefined && d.rate === undefined) return;
 			frappe.model.set_value(cdt, cdn, "rate_per_unit", flt(d.rate_per_unit));
 			frappe.model.set_value(cdt, cdn, "rate", flt(d.rate));
 		},
