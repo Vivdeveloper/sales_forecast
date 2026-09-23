@@ -141,6 +141,8 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 		});
 		// Packed good drives the Standard Selling Rate/Rate Per Unit for Misc Customer.
 		fetch_misc_customer_price(frm, cdt, cdn);
+		// Sales/pipeline history is keyed off the packed good -> (re)pull it now.
+		fetch_last_month_sales(frm, cdt, cdn);
 	}
 });
 
@@ -180,15 +182,25 @@ function fetch_misc_customer_price(frm, cdt, cdn) {
 	});
 }
 
-// Pull last month's week-wise Sales Qty + Sales Amount (without GST) for the row's item
-// (+customer) from submitted Sales Invoices, and fill the read-only columns.
+// Pull last month's week-wise Sales Qty + Sales Amount (without GST) for the row's
+// PACKED GOODS item (+customer) from submitted Sales Invoices, and fill the read-only
+// columns. The sales/GRN/invoice history lives against the packed good, not the main item,
+// so the pipeline figures are keyed off packed_goods. No packed good -> clear the columns.
 function fetch_last_month_sales(frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
-	if (!row.item_code) return;
+	if (!row.packed_goods) {
+		[1, 2, 3, 4].forEach((n) => {
+			frappe.model.set_value(cdt, cdn, `sales_qty_week_${n}`, 0);
+			frappe.model.set_value(cdt, cdn, `sales_amount_week_${n}`, 0);
+		});
+		frappe.model.set_value(cdt, cdn, "sales_total_qty", 0);
+		frappe.model.set_value(cdt, cdn, "total_sales_amount", 0);
+		return;
+	}
 	frappe.call({
 		method: "sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person.get_last_month_sales",
 		args: {
-			item_code: row.item_code,
+			item_code: row.packed_goods,
 			customer: row.customer || "",
 			ref_date: frm.doc.forecast_start_date || frm.doc.posting_date || "",
 			company: frm.doc.company || "",

@@ -28,15 +28,23 @@ class ForecastSalesPerson(Document):
 
 	def set_last_month_sales(self):
 		"""Populate each row's week-wise Sales Qty and Sales Amount (without GST) from LAST
-		MONTH's submitted Sales Invoices for that item (+customer). 'Last month' = the calendar
-		month before the forecast start date."""
+		MONTH's submitted Sales Invoices for the row's PACKED GOODS item (+customer). The
+		actual sales/GRN/invoice history is tracked against the packed good, not the main
+		(finished) item, so the pipeline figures are pulled for packed_goods. 'Last month' =
+		the calendar month before the forecast start date. Rows without a Packed Goods are
+		zeroed (nothing to reconcile yet)."""
 		from frappe.utils import flt
 
 		ref = self.forecast_start_date or self.posting_date
 		for row in self.items or []:
-			if not row.item_code:
+			if not row.get("packed_goods"):
+				for n in (1, 2, 3, 4):
+					row.set(f"sales_qty_week_{n}", 0)
+					row.set(f"sales_amount_week_{n}", 0)
+				row.sales_total_qty = 0
+				row.total_sales_amount = 0
 				continue
-			data = get_last_month_sales(row.item_code, row.customer, ref, self.company)
+			data = get_last_month_sales(row.packed_goods, row.customer, ref, self.company)
 			q, a = data["qty"], data["amount"]
 			for n in (1, 2, 3, 4):
 				row.set(f"sales_qty_week_{n}", flt(q.get(str(n))))
