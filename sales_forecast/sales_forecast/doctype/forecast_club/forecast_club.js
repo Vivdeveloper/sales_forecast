@@ -396,7 +396,7 @@ function fetch_sales_forecasts_if_dates_set(frm) {
 	}
 	return Promise.resolve();
 }
-
+ 
 // Colour-code the Production Plan fields in the row editor so Quantities, Batch counts
 // and Blenders are easy to tell apart at a glance:
 //   Blenders (Workstation)      -> blue
