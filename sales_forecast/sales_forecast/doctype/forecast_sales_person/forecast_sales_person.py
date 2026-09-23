@@ -16,6 +16,7 @@ class ForecastSalesPerson(Document):
 		self.set_item_sales_uom()
 		self.set_loose_material()
 		self.set_last_month_sales()
+		self.set_forecast_and_difference()
 
 	def set_loose_material(self):
 		"""Loose Material Week N = Filling Capacity × Week N (per item row). Also roll up
@@ -68,11 +69,24 @@ class ForecastSalesPerson(Document):
 				row.sales_uom = frappe.db.get_value("Item", row.item_code, "stock_uom")
 
 	def set_monthly_target_totals(self):
-		"""Store the Sales Person's monthly-target qty for the forecast period."""
+		"""Store the Sales Person's monthly-target qty AND amount for the forecast period."""
 		summary = get_monthly_target_summary(
 			self.sales_person, self.forecast_start_date, self.forecast_end_date
 		)
 		self.monthly_target_qty = summary["target_qty"]
+		self.monthly_target_amount = summary["target_amount"]
+
+	def set_forecast_and_difference(self):
+		"""Forecast Quantity = sum of every item's Total Week Quantity (Loose) (= all loose weeks).
+		Forecast Amount = sum of every item's Total Month Rate (Loose) (= loose qty × rate, the
+		Amount Week-wise Total). Difference = how much the forecast is SHORT of the target
+		(Target − Forecast), floored at 0 — we never show a negative (over-forecast → 0)."""
+		from frappe.utils import flt
+
+		self.forecast_qty = sum(flt(row.total_week_quantity_loose) for row in (self.items or []))
+		self.forecast_amount = sum(flt(row.total_month_rate_loose) for row in (self.items or []))
+		self.difference_qty = max(0.0, flt(self.monthly_target_qty) - flt(self.forecast_qty))
+		self.difference_amount = max(0.0, flt(self.monthly_target_amount) - flt(self.forecast_amount))
 
 	def set_actual_qty(self):
 		"""Actual Qty = sum of Week 1..Week 4 across all forecast items."""

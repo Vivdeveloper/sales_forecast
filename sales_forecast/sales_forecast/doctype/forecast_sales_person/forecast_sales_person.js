@@ -52,6 +52,8 @@ frappe.ui.form.on("Forecast Sales Person", {
 function update_monthly_target(frm) {
 	if (!frm.doc.sales_person || !frm.doc.forecast_start_date || !frm.doc.forecast_end_date) {
 		frm.set_value('monthly_target_qty', 0);
+		frm.set_value('monthly_target_amount', 0);
+		recompute_summary(frm);
 		return;
 	}
 
@@ -65,9 +67,34 @@ function update_monthly_target(frm) {
 		callback: function(r) {
 			if (r.message) {
 				frm.set_value('monthly_target_qty', r.message.target_qty);
+				frm.set_value('monthly_target_amount', r.message.target_amount);
+				// target changed -> the shortfall vs forecast changes too
+				recompute_summary(frm);
 			}
 		}
 	});
+}
+
+// Forecast Quantity / Amount = the loose-material grand totals; Difference = how much the
+// forecast is SHORT of the target (Target − Forecast, floored at 0 — never negative). These
+// are read-only display fields kept in sync live; the server recomputes them on save (source
+// of truth), so assign directly to avoid marking a saved doc dirty just by viewing it.
+function recompute_summary(frm) {
+	let loose_qty = 0, loose_amt = 0;
+	(frm.doc.items || []).forEach((row) => {
+		loose_qty += flt(row.total_week_quantity_loose);
+		loose_amt += flt(row.total_month_rate_loose);
+	});
+	const diff_qty = Math.max(0, flt(frm.doc.monthly_target_qty) - loose_qty);
+	const diff_amt = Math.max(0, flt(frm.doc.monthly_target_amount) - loose_amt);
+
+	const assign = (field, val) => {
+		if (frm.doc[field] !== val) { frm.doc[field] = val; frm.refresh_field(field); }
+	};
+	assign('forecast_qty', loose_qty);
+	assign('forecast_amount', loose_amt);
+	assign('difference_qty', diff_qty);
+	assign('difference_amount', diff_amt);
 }
 
 frappe.ui.form.on("Forecast Sales Person Wise Item", {
@@ -86,9 +113,11 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 	week_3: (frm, cdt, cdn) => { recompute_loose_material(frm, cdt, cdn); render_week_totals(frm); },
 	week_4: (frm, cdt, cdn) => { recompute_loose_material(frm, cdt, cdn); render_week_totals(frm); },
 
-	// Filling Capacity changed (e.g. after picking Packed Goods) -> recompute Loose Material.
+	// Filling Capacity changed (e.g. after picking Packed Goods) -> recompute Loose Material,
+	// then re-render the totals + Forecast/Difference summary so it all updates live.
 	filling_capacity(frm, cdt, cdn) {
 		recompute_loose_material(frm, cdt, cdn);
+		render_week_totals(frm);
 	},
 
 	// Changing the item changes which packing materials are valid — clear stale selections,
@@ -202,8 +231,10 @@ function fetch_customer_rate(frm, cdt, cdn) {
 			if (d.rate_per_unit === undefined && d.rate === undefined) return;
 			frappe.model.set_value(cdt, cdn, "rate_per_unit", flt(d.rate_per_unit));
 			frappe.model.set_value(cdt, cdn, "rate", flt(d.rate));
-			// Rate feeds Total Month Rate (Loose) -> recompute it.
+			// Rate feeds Total Month Rate (Loose) -> recompute it, then re-render the Amount
+			// Week-wise Total + Forecast/Difference Amount so pricing changes reflect live.
 			recompute_loose_totals(frm, cdt, cdn);
+			render_week_totals(frm);
 		},
 	});
 }
@@ -257,36 +288,47 @@ function setup_packed_goods_filter(frm) {
 	});
 }
 
-// Show a live, UI-only week-wise total row below the Items table (not a data row).
-// Sums week_1..week_4 across all item rows; shows 0 when there is nothing to add.
+// Show live, UI-only week-wise total tables below the Items table (not data rows):
+//   1. Packed Goods Week-wise Total  — sum of week_1..4 (packed qty) across all items
+//   2. Loose Material Week-wise Total — sum of loose_material_week_1..4 across all items
+//   3. Amount Week-wise Total         — per week: sum of (loose qty × rate) across all items
+// Each shows 0 when there is nothing to add.
 function render_week_totals(frm) {
 	const wrapper = frm.fields_dict.week_totals_html && frm.fields_dict.week_totals_html.$wrapper;
 	if (!wrapper) return;
 
-	const totals = { week_1: 0, week_2: 0, week_3: 0, week_4: 0 };
+	const packed = { week_1: 0, week_2: 0, week_3: 0, week_4: 0 };
+	const loose = { week_1: 0, week_2: 0, week_3: 0, week_4: 0 };
+	const amount = { week_1: 0, week_2: 0, week_3: 0, week_4: 0 };
 	(frm.doc.items || []).forEach((row) => {
-		totals.week_1 += flt(row.week_1);
-		totals.week_2 += flt(row.week_2);
-		totals.week_3 += flt(row.week_3);
-		totals.week_4 += flt(row.week_4);
+		const rate = flt(row.rate);
+		[1, 2, 3, 4].forEach((n) => {
+			packed[`week_${n}`] += flt(row[`week_${n}`]);
+			const lw = flt(row[`loose_material_week_${n}`]);
+			loose[`week_${n}`] += lw;
+			amount[`week_${n}`] += lw * rate;   // loose quantity × rate, per week
+		});
 	});
 
 	const fmt = (v) => format_number(v, null, 3);
-	const grand = totals.week_1 + totals.week_2 + totals.week_3 + totals.week_4;
+	const fmt2 = (v) => format_number(v, null, 2);
+	const packed_grand = packed.week_1 + packed.week_2 + packed.week_3 + packed.week_4;
 
-	// Actual Qty field = grand total of all weeks. Assign directly (server validate
+	// Actual Qty field = grand total of all PACKED weeks. Assign directly (server validate
 	// persists it) so simply viewing a saved doc doesn't mark it dirty.
-	if (frm.doc.actual_qty !== grand) {
-		frm.doc.actual_qty = grand;
+	if (frm.doc.actual_qty !== packed_grand) {
+		frm.doc.actual_qty = packed_grand;
 		frm.refresh_field('actual_qty');
 	}
 
-	wrapper.html(`
-		<div class="week-totals" style="margin-top:8px;">
-			<table class="table table-bordered" style="margin-bottom:0;">
+	// one table = heading + a "Sum of all items" row across the 4 weeks + a grand total
+	const total_table = (heading, t, cellfmt) => {
+		const grand = t.week_1 + t.week_2 + t.week_3 + t.week_4;
+		return `
+			<table class="table table-bordered" style="margin-bottom:12px;">
 				<thead>
 					<tr class="text-muted">
-						<th style="width:40%;">Week-wise Total</th>
+						<th style="width:40%;">${heading}</th>
 						<th class="text-right">Week 1</th>
 						<th class="text-right">Week 2</th>
 						<th class="text-right">Week 3</th>
@@ -297,16 +339,26 @@ function render_week_totals(frm) {
 				<tbody>
 					<tr>
 						<td class="text-muted">Sum of all items</td>
-						<td class="text-right"><b>${fmt(totals.week_1)}</b></td>
-						<td class="text-right"><b>${fmt(totals.week_2)}</b></td>
-						<td class="text-right"><b>${fmt(totals.week_3)}</b></td>
-						<td class="text-right"><b>${fmt(totals.week_4)}</b></td>
-						<td class="text-right"><b>${fmt(grand)}</b></td>
+						<td class="text-right"><b>${cellfmt(t.week_1)}</b></td>
+						<td class="text-right"><b>${cellfmt(t.week_2)}</b></td>
+						<td class="text-right"><b>${cellfmt(t.week_3)}</b></td>
+						<td class="text-right"><b>${cellfmt(t.week_4)}</b></td>
+						<td class="text-right"><b>${cellfmt(grand)}</b></td>
 					</tr>
 				</tbody>
-			</table>
+			</table>`;
+	};
+
+	wrapper.html(`
+		<div class="week-totals" style="margin-top:8px;">
+			${total_table('Packed Goods Week-wise Total', packed, fmt)}
+			${total_table('Loose Material Week-wise Total', loose, fmt)}
+			${total_table('Amount Week-wise Total', amount, fmt2)}
 		</div>
 	`);
+
+	// keep the Target vs Forecast summary fields in sync with these totals
+	recompute_summary(frm);
 }
 
 // Restrict the Item Code picker in the Items table to Finished Goods (and its

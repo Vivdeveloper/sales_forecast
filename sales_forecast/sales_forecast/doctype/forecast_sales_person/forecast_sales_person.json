@@ -10,7 +10,6 @@
   "posting_date",
   "sales_person",
   "naming_series",
-  "monthly_target_qty",
   "actual_qty",
   "column_break_jpwp",
   "forecast_start_date",
@@ -19,6 +18,15 @@
   "company",
   "forecast_type",
   "special_reason",
+  "sec_summary",
+  "monthly_target_qty",
+  "monthly_target_amount",
+  "cb_sum1",
+  "forecast_qty",
+  "forecast_amount",
+  "cb_sum2",
+  "difference_qty",
+  "difference_amount",
   "section_break_gbgu",
   "items",
   "week_totals_html"
@@ -69,10 +77,58 @@
    "reqd": 1
   },
   {
+   "fieldname": "sec_summary",
+   "fieldtype": "Section Break",
+   "label": "Target vs Forecast"
+  },
+  {
    "description": "Sum of the Sales Person's Monthly Target Qty for the months covered by the forecast period.",
    "fieldname": "monthly_target_qty",
    "fieldtype": "Float",
    "label": "Target Qty (from Monthly Targets)",
+   "read_only": 1
+  },
+  {
+   "description": "Sum of the Sales Person's Monthly Target Amount for the months covered by the forecast period.",
+   "fieldname": "monthly_target_amount",
+   "fieldtype": "Currency",
+   "label": "Target Amount (from Monthly Targets)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb_sum1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Forecast Quantity = sum of all Loose Material weeks across every item (Loose Material Week-wise Total).",
+   "fieldname": "forecast_qty",
+   "fieldtype": "Float",
+   "label": "Forecast Quantity",
+   "read_only": 1
+  },
+  {
+   "description": "Forecast Amount = total month loose amount (Amount Week-wise Total = loose qty × rate).",
+   "fieldname": "forecast_amount",
+   "fieldtype": "Currency",
+   "label": "Forecast Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb_sum2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "How much the Forecast Quantity is SHORT of the Target Qty (Target − Forecast). 0 when forecast meets or exceeds target.",
+   "fieldname": "difference_qty",
+   "fieldtype": "Float",
+   "label": "Difference Quantity",
+   "read_only": 1
+  },
+  {
+   "description": "How much the Forecast Amount is SHORT of the Target Amount (Target − Forecast). 0 when forecast meets or exceeds target.",
+   "fieldname": "difference_amount",
+   "fieldtype": "Currency",
+   "label": "Difference Amount",
    "read_only": 1
   },
   {
