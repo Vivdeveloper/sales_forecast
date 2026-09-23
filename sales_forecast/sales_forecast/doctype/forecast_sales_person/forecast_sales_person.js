@@ -97,8 +97,8 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 		frappe.model.set_value(cdt, cdn, "packed_goods", null);
 		frappe.model.set_value(cdt, cdn, "filling_capacity", 0);
 		fetch_last_month_sales(frm, cdt, cdn);
-		// If Miscellaneous Customer is already ticked, refresh its Standard Selling price.
-		fetch_misc_customer_price(frm, cdt, cdn);
+		// Item changed -> packed good cleared above, so the rate has no basis; clear it.
+		fetch_customer_rate(frm, cdt, cdn);
 	},
 
 	// Customer scopes the sales history -> refetch. Customer and Miscellaneous Customer are
@@ -117,15 +117,15 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 		fetch_customer_rate(frm, cdt, cdn);
 	},
 
-	// Miscellaneous Customer: on tick, fill Rate/Rate Per Unit from the item's Standard
-	// Selling price. Mutually exclusive with Customer: ticking it clears + disables Customer.
+	// Miscellaneous Customer: on tick, fill Rate/Rate Per Unit from the packed good's Standard
+	// Selling (company) price. Mutually exclusive with Customer: ticking it clears + disables Customer.
 	miscellaneous_customer(frm, cdt, cdn) {
 		const row = locals[cdt][cdn];
 		if (row.miscellaneous_customer && row.customer) {
 			frappe.model.set_value(cdt, cdn, "customer", "");
 		}
 		enforce_customer_exclusivity(frm);
-		fetch_misc_customer_price(frm, cdt, cdn);
+		fetch_customer_rate(frm, cdt, cdn);
 	},
 
 	// Selecting a Packed Goods fetches its Filling Capacity from the item's Packing
@@ -141,11 +141,9 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 			args: { item_code: row.item_code, packed_goods: row.packed_goods },
 			callback: (r) => frappe.model.set_value(cdt, cdn, "filling_capacity", flt(r.message)),
 		});
-		// Packed good drives the Standard Selling Rate/Rate Per Unit for Misc Customer.
-		fetch_misc_customer_price(frm, cdt, cdn);
 		// Sales/pipeline history is keyed off the packed good -> (re)pull it now.
 		fetch_last_month_sales(frm, cdt, cdn);
-		// Rate Per Unit + Rate also come from the packed good's Item Price (per customer).
+		// Rate Per Unit + Rate come from the packed good's Item Price (per customer / misc = company).
 		fetch_customer_rate(frm, cdt, cdn);
 	}
 });
@@ -165,38 +163,24 @@ function recompute_loose_material(frm, cdt, cdn) {
 	});
 }
 
-// Miscellaneous Customer flow: when ticked, fill the row's Rate Per Unit + Rate from the
-// PACKED GOOD's Standard Selling Item Price (the price list is only the filter, and only the
-// packed-good price carries Rate Per Unit); on untick (or no packed good), clear.
-function fetch_misc_customer_price(frm, cdt, cdn) {
+// Fill the row's Rate Per Unit + Rate from the PACKED GOOD's Item Price. Live, on change.
+// Preference:
+//   - Real Customer selected -> that customer's "Customer Special" price, else Standard Selling.
+//   - Miscellaneous Customer ticked (no specific customer) -> Standard Selling (company rate).
+// No packed good -> no pricing basis, clear both. Nothing found in Item Price -> keep as-is.
+function fetch_customer_rate(frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
-	if (!row.miscellaneous_customer || !row.packed_goods) {
+	// No packed good yet -> nothing to price against, clear.
+	if (!row.packed_goods) {
 		frappe.model.set_value(cdt, cdn, "rate_per_unit", 0);
 		frappe.model.set_value(cdt, cdn, "rate", 0);
 		return;
 	}
-	frappe.call({
-		method: "sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person.get_standard_selling_price",
-		args: { item_code: row.packed_goods },
-		callback: (r) => {
-			const d = r.message || {};
-			frappe.model.set_value(cdt, cdn, "rate_per_unit", flt(d.rate_per_unit));
-			frappe.model.set_value(cdt, cdn, "rate", flt(d.rate));
-		},
-	});
-}
-
-// Fill the row's Rate Per Unit + Rate from the PACKED GOOD's Item Price, based on the
-// selected Customer: prefer that customer's "Customer Special" price, else fall back to
-// "Standard Selling" (the company rate). If neither exists, leave the fields as-is. Live.
-// (The Miscellaneous Customer flow has its own Standard-Selling fetch — skip it here.)
-function fetch_customer_rate(frm, cdt, cdn) {
-	const row = locals[cdt][cdn];
-	if (row.miscellaneous_customer) return;
-	if (!row.packed_goods) return;
+	// Misc customer has no specific customer -> company (Standard Selling) rate only.
+	const customer = row.miscellaneous_customer ? "" : (row.customer || "");
 	frappe.call({
 		method: "sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person.get_customer_item_rate",
-		args: { item_code: row.packed_goods, customer: row.customer || "" },
+		args: { item_code: row.packed_goods, customer: customer },
 		callback: (r) => {
 			const d = r.message || {};
 			// Nothing found -> keep whatever is already there.
