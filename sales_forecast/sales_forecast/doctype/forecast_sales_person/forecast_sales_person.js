@@ -154,13 +154,28 @@ function enforce_customer_exclusivity(frm) {
 	frm.refresh_field("items");
 }
 
-// Loose Material Week N = Filling Capacity × Week N (read-only, auto).
+// Loose Material Week N = Filling Capacity × Week N (read-only, auto). Then roll up the
+// loose totals.
 function recompute_loose_material(frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
 	const fc = flt(row.filling_capacity);
 	[1, 2, 3, 4].forEach((n) => {
 		frappe.model.set_value(cdt, cdn, `loose_material_week_${n}`, fc * flt(row[`week_${n}`]));
 	});
+	recompute_loose_totals(frm, cdt, cdn);
+}
+
+// Total Week Quantity (Loose) = sum of the four loose weeks; Total Month Rate (Loose) =
+// that total × Rate (read-only, auto).
+function recompute_loose_totals(frm, cdt, cdn) {
+	const row = locals[cdt][cdn];
+	const total_loose =
+		flt(row.loose_material_week_1) +
+		flt(row.loose_material_week_2) +
+		flt(row.loose_material_week_3) +
+		flt(row.loose_material_week_4);
+	frappe.model.set_value(cdt, cdn, "total_week_quantity_loose", total_loose);
+	frappe.model.set_value(cdt, cdn, "total_month_rate_loose", total_loose * flt(row.rate));
 }
 
 // Fill the row's Rate Per Unit + Rate from the PACKED GOOD's Item Price. Live, on change.
@@ -187,6 +202,8 @@ function fetch_customer_rate(frm, cdt, cdn) {
 			if (d.rate_per_unit === undefined && d.rate === undefined) return;
 			frappe.model.set_value(cdt, cdn, "rate_per_unit", flt(d.rate_per_unit));
 			frappe.model.set_value(cdt, cdn, "rate", flt(d.rate));
+			// Rate feeds Total Month Rate (Loose) -> recompute it.
+			recompute_loose_totals(frm, cdt, cdn);
 		},
 	});
 }

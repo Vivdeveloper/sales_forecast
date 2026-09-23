@@ -33,6 +33,8 @@
   "loose_material_week_3",
   "cb_l4",
   "loose_material_week_4",
+  "total_week_quantity_loose",
+  "total_month_rate_loose",
   "sec_sqty",
   "sales_qty_week_1",
   "cb_sq2",
@@ -201,6 +203,22 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Loose Material Week 4",
+   "read_only": 1
+  },
+  {
+   "description": "Sum of Loose Material Week 1–4 (auto).",
+   "fieldname": "total_week_quantity_loose",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Total Week Quantity (Loose)",
+   "read_only": 1
+  },
+  {
+   "description": "Total Week Quantity (Loose) × Rate (auto).",
+   "fieldname": "total_month_rate_loose",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Total Month Rate (Loose)",
    "read_only": 1
   },
   {

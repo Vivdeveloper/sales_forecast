@@ -18,13 +18,20 @@ class ForecastSalesPerson(Document):
 		self.set_last_month_sales()
 
 	def set_loose_material(self):
-		"""Loose Material Week N = Filling Capacity × Week N (per item row)."""
+		"""Loose Material Week N = Filling Capacity × Week N (per item row). Also roll up
+		Total Week Quantity (Loose) = sum of the four loose weeks, and Total Month Rate
+		(Loose) = that total × Rate."""
 		from frappe.utils import flt
 
 		for row in self.items or []:
 			fc = flt(row.get("filling_capacity"))
+			total_loose = 0.0
 			for n in (1, 2, 3, 4):
-				row.set(f"loose_material_week_{n}", fc * flt(row.get(f"week_{n}")))
+				val = fc * flt(row.get(f"week_{n}"))
+				row.set(f"loose_material_week_{n}", val)
+				total_loose += val
+			row.total_week_quantity_loose = total_loose
+			row.total_month_rate_loose = total_loose * flt(row.get("rate"))
 
 	def set_last_month_sales(self):
 		"""Populate each row's week-wise Sales Qty and Sales Amount (without GST) from LAST
