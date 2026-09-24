@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import json
+import math
 
 import frappe
 from frappe import _
@@ -132,6 +133,11 @@ class ForecastClub(Document):
 			for n in (1, 2, 3, 4):
 				# 2nd blender is enabled PER WEEK via its own checkbox.
 				use_b2 = bool(item.get(f"enable_blender_2_w{n}"))
+				# Blender 1's No of Batches is auto = ceil(week loose qty / Blender 1 capacity).
+				# (Blender 2's count stays manual.) Only when a capacity is set; else leave as-is.
+				b1_cap = flt(item.get(f"batch_capacity_{n}"))
+				if b1_cap > 0:
+					item.set(f"w{n}_batch", math.ceil(flt(item.get(f"week_{n}")) / b1_cap))
 				# Batch Qty (loose) = No of Batches x Blender Capacity, per blender.
 				b1_qty = flt(item.get(f"w{n}_batch")) * flt(item.get(f"batch_capacity_{n}"))
 				b2_qty = (flt(item.get(f"w{n}_batch2")) * flt(item.get(f"batch_capacity2_{n}"))) if use_b2 else 0

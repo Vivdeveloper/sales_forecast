@@ -477,22 +477,22 @@ frappe.ui.form.on("Forecast Club Item", {
 	},
 
 	week_1(frm, cdt, cdn) {
-		validate_week_batch_relationship(frm, cdt, cdn, 'week_1', 'w1_batch', 'Week 1');
+		autoset_b1_batches(frm, cdt, cdn, 1);
 		calculate_totals(frm, cdt, cdn);
 	},
 
 	week_2(frm, cdt, cdn) {
-		validate_week_batch_relationship(frm, cdt, cdn, 'week_2', 'w2_batch', 'Week 2');
+		autoset_b1_batches(frm, cdt, cdn, 2);
 		calculate_totals(frm, cdt, cdn);
 	},
 
 	week_3(frm, cdt, cdn) {
-		validate_week_batch_relationship(frm, cdt, cdn, 'week_3', 'w3_batch', 'Week 3');
+		autoset_b1_batches(frm, cdt, cdn, 3);
 		calculate_totals(frm, cdt, cdn);
 	},
 
 	week_4(frm, cdt, cdn) {
-		validate_week_batch_relationship(frm, cdt, cdn, 'week_4', 'w4_batch', 'Week 4');
+		autoset_b1_batches(frm, cdt, cdn, 4);
 		calculate_totals(frm, cdt, cdn);
 	},
 
@@ -516,11 +516,12 @@ frappe.ui.form.on("Forecast Club Item", {
 		calculate_totals(frm, cdt, cdn);
 	},
 
-	// Recompute when batch capacity changes (also fires when fetched from the blender)
-	batch_capacity_1(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
-	batch_capacity_2(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
-	batch_capacity_3(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
-	batch_capacity_4(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
+	// Recompute when batch capacity changes (also fires when fetched from the blender).
+	// Blender 1's No of Batches is derived from the capacity, so re-auto-set it here too.
+	batch_capacity_1(frm, cdt, cdn) { autoset_b1_batches(frm, cdt, cdn, 1); calculate_totals(frm, cdt, cdn); },
+	batch_capacity_2(frm, cdt, cdn) { autoset_b1_batches(frm, cdt, cdn, 2); calculate_totals(frm, cdt, cdn); },
+	batch_capacity_3(frm, cdt, cdn) { autoset_b1_batches(frm, cdt, cdn, 3); calculate_totals(frm, cdt, cdn); },
+	batch_capacity_4(frm, cdt, cdn) { autoset_b1_batches(frm, cdt, cdn, 4); calculate_totals(frm, cdt, cdn); },
 
 	// Plan Qty is reduce-only: it may not exceed that week's Batch Qty, nor go below 0.
 	w1_plan_qty(frm, cdt, cdn) { cap_plan_qty(frm, cdt, cdn, 'w1_plan_qty', 'w1_batch_qty', 'Week 1'); },
@@ -528,11 +529,12 @@ frappe.ui.form.on("Forecast Club Item", {
 	w3_plan_qty(frm, cdt, cdn) { cap_plan_qty(frm, cdt, cdn, 'w3_plan_qty', 'w3_batch_qty', 'Week 3'); },
 	w4_plan_qty(frm, cdt, cdn) { cap_plan_qty(frm, cdt, cdn, 'w4_plan_qty', 'w4_batch_qty', 'Week 4'); },
 
-	// Blender selection fetches batch_capacity_N (fetch_from); recompute after the fetch settles
-	blender_week_1(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
-	blender_week_2(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
-	blender_week_3(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
-	blender_week_4(frm, cdt, cdn) { setTimeout(() => calculate_totals(frm, cdt, cdn), 500); },
+	// Blender selection fetches batch_capacity_N (fetch_from); once it settles, auto-set
+	// Blender 1's No of Batches (= ceil(loose / capacity)) then recompute.
+	blender_week_1(frm, cdt, cdn) { setTimeout(() => { autoset_b1_batches(frm, cdt, cdn, 1); calculate_totals(frm, cdt, cdn); }, 500); },
+	blender_week_2(frm, cdt, cdn) { setTimeout(() => { autoset_b1_batches(frm, cdt, cdn, 2); calculate_totals(frm, cdt, cdn); }, 500); },
+	blender_week_3(frm, cdt, cdn) { setTimeout(() => { autoset_b1_batches(frm, cdt, cdn, 3); calculate_totals(frm, cdt, cdn); }, 500); },
+	blender_week_4(frm, cdt, cdn) { setTimeout(() => { autoset_b1_batches(frm, cdt, cdn, 4); calculate_totals(frm, cdt, cdn); }, 500); },
 
 	// Blender 2 (only when "Use 2nd Blender" is on) — same recompute triggers as Blender 1.
 	w1_batch2(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
@@ -757,6 +759,18 @@ function toggle_blender2_week(frm, cdt, cdn, n) {
 		frappe.model.set_value(cdt, cdn, "w" + n + "_batch2", 0);
 	}
 	calculate_totals(frm, cdt, cdn);
+}
+
+// Blender 1's "No of Batches" is auto = ceil(week's Loose Quantity / Blender 1 Capacity).
+// (Blender 2's count is still entered manually.) Only sets when a capacity is present;
+// with no capacity yet (blender not picked) it leaves the field untouched.
+function autoset_b1_batches(frm, cdt, cdn, n) {
+	const row = locals[cdt][cdn];
+	if (!row) return;
+	const cap = flt(row['batch_capacity_' + n]);
+	if (cap > 0) {
+		frappe.model.set_value(cdt, cdn, 'w' + n + '_batch', Math.ceil(flt(row['week_' + n]) / cap));
+	}
 }
 
 function calculate_totals(frm, cdt, cdn) {
