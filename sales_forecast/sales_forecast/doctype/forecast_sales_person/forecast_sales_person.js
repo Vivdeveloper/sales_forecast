@@ -195,7 +195,7 @@ function recompute_loose_material(frm, cdt, cdn) {
 }
 
 // Total Week Quantity (Loose) = sum of the four loose weeks; Total Month Rate (Loose) =
-// that total × Rate (read-only, auto).
+// that total × Rate Per Unit (read-only, auto).
 function recompute_loose_totals(frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
 	const total_loose =
@@ -204,7 +204,7 @@ function recompute_loose_totals(frm, cdt, cdn) {
 		flt(row.loose_material_week_3) +
 		flt(row.loose_material_week_4);
 	frappe.model.set_value(cdt, cdn, "total_week_quantity_loose", total_loose);
-	frappe.model.set_value(cdt, cdn, "total_month_rate_loose", total_loose * flt(row.rate));
+	frappe.model.set_value(cdt, cdn, "total_month_rate_loose", total_loose * flt(row.rate_per_unit));
 }
 
 // Fill the row's Rate Per Unit + Rate from the PACKED GOOD's Item Price. Live, on change.

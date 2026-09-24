@@ -32,7 +32,7 @@ class ForecastSalesPerson(Document):
 				row.set(f"loose_material_week_{n}", val)
 				total_loose += val
 			row.total_week_quantity_loose = total_loose
-			row.total_month_rate_loose = total_loose * flt(row.get("rate"))
+			row.total_month_rate_loose = total_loose * flt(row.get("rate_per_unit"))
 
 	def set_last_month_sales(self):
 		"""Populate each row's week-wise Sales Qty and Sales Amount (without GST) from LAST
