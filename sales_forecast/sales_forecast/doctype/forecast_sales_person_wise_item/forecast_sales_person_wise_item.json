@@ -6,55 +6,55 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "item_code",
-  "sales_uom",
-  "packed_goods",
-  "filling_capacity",
-  "cb_hdr",
-  "item_name",
   "miscellaneous_customer",
   "customer",
   "customer_name",
+  "item_code",
+  "item_name",
+  "packed_goods",
+  "filling_capacity",
   "rate_per_unit",
-  "rate",
-  "sec_forecast",
   "week_1",
-  "cb_f2",
   "week_2",
-  "cb_f3",
   "week_3",
-  "cb_f4",
   "week_4",
-  "sec_loose",
   "loose_material_week_1",
-  "cb_l2",
   "loose_material_week_2",
-  "cb_l3",
   "loose_material_week_3",
-  "cb_l4",
   "loose_material_week_4",
+  "sales_total_qty",
+  "sales_amount_week_1",
+  "sales_amount_week_2",
+  "sales_amount_week_3",
+  "sales_amount_week_4",
+  "total_sales_amount",
+  "sales_uom",
+  "rate",
   "total_week_quantity_loose",
   "total_month_rate_loose",
-  "sec_sqty",
   "sales_qty_week_1",
-  "cb_sq2",
   "sales_qty_week_2",
-  "cb_sq3",
   "sales_qty_week_3",
-  "cb_sq4",
   "sales_qty_week_4",
+  "cb_hdr",
+  "sec_forecast",
+  "cb_f2",
+  "cb_f3",
+  "cb_f4",
+  "sec_loose",
+  "cb_l2",
+  "cb_l3",
+  "cb_l4",
+  "sec_sqty",
+  "cb_sq2",
+  "cb_sq3",
+  "cb_sq4",
   "cb_sqt",
-  "sales_total_qty",
   "sec_samt",
-  "sales_amount_week_1",
   "cb_sa2",
-  "sales_amount_week_2",
   "cb_sa3",
-  "sales_amount_week_3",
   "cb_sa4",
-  "sales_amount_week_4",
-  "cb_sat",
-  "total_sales_amount"
+  "cb_sat"
  ],
  "fields": [
   {
@@ -80,7 +80,7 @@
    "fieldname": "packed_goods",
    "fieldtype": "Link",
    "in_list_view": 1,
-   "label": "Packed Goods",
+   "label": "Packing Material",
    "options": "Item"
   },
   {
@@ -89,7 +89,7 @@
    "fieldname": "filling_capacity",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Filling Capacity",
+   "label": "Pack Size Qty",
    "read_only": 1
   },
   {
@@ -106,14 +106,14 @@
    "fieldname": "miscellaneous_customer",
    "fieldtype": "Check",
    "in_list_view": 1,
-   "label": "Miscellaneous Customer",
+   "label": "Misc Customer",
    "read_only_depends_on": "eval:doc.customer"
   },
   {
    "fieldname": "customer",
    "fieldtype": "Link",
    "in_list_view": 1,
-   "label": "Customer",
+   "label": "Customer Code",
    "options": "Customer",
    "read_only_depends_on": "eval:doc.miscellaneous_customer"
   },
@@ -150,35 +150,35 @@
    "fieldname": "week_1",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Week 1"
+   "label": "Week 1 Pack Qty"
   },
   {
    "columns": 1,
    "fieldname": "week_2",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Week 2"
+   "label": "Week 2 Pack Qty"
   },
   {
    "columns": 1,
    "fieldname": "week_3",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Week 3"
+   "label": "Week 3 Pack Qty"
   },
   {
    "columns": 1,
    "fieldname": "week_4",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Week 4"
+   "label": "Week 4 Pack Qty"
   },
   {
    "description": "Filling Capacity \u00d7 Week 1 (auto).",
    "fieldname": "loose_material_week_1",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Loose Material Week 1",
+   "label": "Week 1 Total Sales",
    "read_only": 1
   },
   {
@@ -186,7 +186,7 @@
    "fieldname": "loose_material_week_2",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Loose Material Week 2",
+   "label": "Week 2 Total Sales",
    "read_only": 1
   },
   {
@@ -194,7 +194,7 @@
    "fieldname": "loose_material_week_3",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Loose Material Week 3",
+   "label": "Week 3 Total Sales",
    "read_only": 1
   },
   {
@@ -202,11 +202,11 @@
    "fieldname": "loose_material_week_4",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Loose Material Week 4",
+   "label": "Week 4 Total Sales",
    "read_only": 1
   },
   {
-   "description": "Sum of Loose Material Week 1–4 (auto).",
+   "description": "Sum of Loose Material Week 1\u20134 (auto).",
    "fieldname": "total_week_quantity_loose",
    "fieldtype": "Float",
    "in_list_view": 1,
@@ -214,7 +214,7 @@
    "read_only": 1
   },
   {
-   "description": "Total Week Quantity (Loose) × Rate (auto).",
+   "description": "Total Week Quantity (Loose) \u00d7 Rate (auto).",
    "fieldname": "total_month_rate_loose",
    "fieldtype": "Currency",
    "in_list_view": 1,
@@ -254,7 +254,7 @@
    "fieldname": "sales_total_qty",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Sales Total Qty",
+   "label": "Total Sales",
    "read_only": 1
   },
   {
@@ -262,35 +262,35 @@
    "fieldname": "sales_amount_week_1",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Sales Amount Week 1",
+   "label": "Week 1 Total Revenue",
    "read_only": 1
   },
   {
    "fieldname": "sales_amount_week_2",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Sales Amount Week 2",
+   "label": "Week 2 Total Revenue",
    "read_only": 1
   },
   {
    "fieldname": "sales_amount_week_3",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Sales Amount Week 3",
+   "label": "Week 3 Total Revenue",
    "read_only": 1
   },
   {
    "fieldname": "sales_amount_week_4",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Sales Amount Week 4",
+   "label": "Week 4 Total Revenue",
    "read_only": 1
   },
   {
    "fieldname": "total_sales_amount",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Total Sales Amount",
+   "label": "Total Revenue",
    "read_only": 1
   },
   {
