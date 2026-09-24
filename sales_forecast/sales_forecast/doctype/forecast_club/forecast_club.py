@@ -50,7 +50,12 @@ class ForecastClub(Document):
 		self.check_duplicate_items()
 		self.validate_plant_items()
 		self.validate_duplicate_date_range()
-		self.validate_no_locked_items()
+		# NOTE: validate_no_locked_items() is intentionally NOT called. Clubbing is now
+		# INCREMENTAL — the fetch pulls only the demand not yet taken by other clubs, so the
+		# same item may legitimately appear across several clubs (each holding a slice). The
+		# old "an item may live in only one valid-flow club" block contradicts that model and
+		# would stop a valid incremental club from advancing, so it is disabled. See
+		# get_already_clubbed_qty() / fetch_sales_forecasts().
 
 	def get_locked_items(self):
 		"""Return {item_code: (club_name, workflow_state)} for items already part of a valid
@@ -95,6 +100,50 @@ class ForecastClub(Document):
 		for r in rows:
 			locked.setdefault(r.item_code, (r.club, r.state))  # keep first club per item
 		return locked
+
+	def get_already_clubbed_qty(self):
+		"""Per-item, per-week loose quantity ALREADY taken by other clubs for the same
+		Month x Plant, so a repeat club fetches only the NEW (incremental) demand. Normal and
+		Special SHARE one pool — the sum spans BOTH types (they draw from the same demand), so
+		forecast_type is intentionally NOT filtered. Counts every non-cancelled club (drafts
+		included) except this one.
+
+		Returns {item_code: {1: qty, 2: qty, 3: qty, 4: qty}} (summed across those clubs).
+		"""
+		if not (self.forecast_start_date and self.forecast_end_date and self.plant):
+			return {}
+
+		start_first = get_first_day(getdate(self.forecast_start_date))
+		end_last = get_last_day(getdate(self.forecast_end_date))
+
+		rows = frappe.db.sql(
+			"""
+			SELECT ci.item_code AS item_code,
+			       SUM(ci.week_1) AS w1, SUM(ci.week_2) AS w2,
+			       SUM(ci.week_3) AS w3, SUM(ci.week_4) AS w4
+			FROM `tabForecast Club` fc
+			JOIN `tabForecast Club Item` ci ON ci.parent = fc.name
+			WHERE fc.name != %(self_name)s
+			  AND fc.docstatus != 2
+			  AND IFNULL(fc.workflow_state, '') != 'Cancelled'
+			  AND fc.plant = %(plant)s
+			  AND fc.forecast_start_date <= %(end_last)s
+			  AND fc.forecast_end_date >= %(start_first)s
+			  AND ci.item_code IS NOT NULL AND ci.item_code != ''
+			GROUP BY ci.item_code
+			""",
+			{
+				"self_name": self.name or "new-forecast-club",
+				"plant": self.plant,
+				"start_first": start_first,
+				"end_last": end_last,
+			},
+			as_dict=True,
+		)
+		return {
+			r.item_code: {1: flt(r.w1), 2: flt(r.w2), 3: flt(r.w3), 4: flt(r.w4)}
+			for r in rows
+		}
 
 	def validate_no_locked_items(self):
 		"""Block moving this club INTO a valid-flow (locked) state if any of its items are
@@ -815,10 +864,12 @@ class ForecastClub(Document):
 			)
 			return
 
-		# Items already committed in another club (same month x plant x type) are skipped.
-		locked = self.get_locked_items()
-		skipped = []
-		skipped_codes = set()  # de-dup the skip message across an item's multiple packed-good rows
+		# Repeat clubbing is INCREMENTAL: only the NEW demand comes in. For the same
+		# Month x Plant, subtract what other (non-cancelled) clubs already took, per week —
+		# Normal and Special share one pool. A fully-covered item is left out entirely.
+		already_clubbed = self.get_already_clubbed_qty()
+		fg_skipped = []       # items already covered by finished-goods stock ("already in FG")
+		clubbed_skipped = []  # items whose full demand is already clubbed elsewhere
 
 		# Add aggregated items to the items child table
 		for item_data in items_dict.values():
@@ -830,13 +881,34 @@ class ForecastClub(Document):
 				if manufacturing_location != plant_warehouse:
 					continue
 
-			# Skip items already locked in another committed club for an overlapping month
-			if item_data["item_code"] in locked:
-				if item_data["item_code"] not in skipped_codes:
-					skipped_codes.add(item_data["item_code"])
-					club, state = locked[item_data["item_code"]]
-					skipped.append((item_data["item_code"], club, state))
+			# Skip items whose finished-goods stock already covers the forecast demand
+			# ("already in FG" -> nothing to plan). FG stock = the same "FG Company Stock"
+			# shown on the row: loose stock across the FG warehouses + packing loose qty.
+			total_demand = (
+				flt(item_data["week_1"]) + flt(item_data["week_2"])
+				+ flt(item_data["week_3"]) + flt(item_data["week_4"])
+			)
+			fg_stock = (
+				self._get_item_stock_in_warehouses(item_data["item_code"], FG_COMPANY_STOCK_WAREHOUSES)
+				+ self._get_total_packing_loose_qty(item_data["item_code"])
+			)
+			if total_demand > 0 and fg_stock >= total_demand:
+				fg_skipped.append((item_data["item_code"], fg_stock, total_demand))
 				continue
+
+			# Incremental: this club's week qty = total forecast this week - already clubbed
+			# by other clubs (never negative). A brand-new item has nothing subtracted.
+			# Only applied to items that actually have demand; zero-demand rows keep the old
+			# behaviour (included with 0s) so this change doesn't drop unrelated items.
+			if total_demand > 0:
+				taken = already_clubbed.get(item_data["item_code"], {})
+				new_weeks = {n: max(0.0, flt(item_data[f"week_{n}"]) - flt(taken.get(n))) for n in (1, 2, 3, 4)}
+				if sum(new_weeks.values()) <= 0:
+					# Whole demand is already accounted for in other clubs -> nothing new to add.
+					clubbed_skipped.append(item_data["item_code"])
+					continue
+			else:
+				new_weeks = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
 
 			# Get BOM for the item if it exists
 			bom = frappe.db.get_value("BOM", {"item": item_data["item_code"], "is_default": 1, "is_active": 1}, "name")
@@ -850,24 +922,34 @@ class ForecastClub(Document):
 				"item_name": item_data["item_name"],
 				"sales_uom": frappe.db.get_value("Item", item_data["item_code"], "stock_uom"),
 				"bom": bom,
-				"week_1": item_data["week_1"],
-				"week_2": item_data["week_2"],
-				"week_3": item_data["week_3"],
-				"week_4": item_data["week_4"],
+				"week_1": new_weeks[1],
+				"week_2": new_weeks[2],
+				"week_3": new_weeks[3],
+				"week_4": new_weeks[4],
 				"custom_packed_goods_weekly_data": json.dumps(packed_rows),
 			})
 
 		plant_note = f" for {self.plant}" if self.plant else ""
 		frappe.msgprint(f"Fetched {len(self.items)} items{plant_note} from {len(forecast_docs)} sales forecasts")
 
-		if skipped:
+		if clubbed_skipped:
+			msg = "<br>".join(frappe.bold(ic) for ic in clubbed_skipped)
+			frappe.msgprint(
+				_("{0} item(s) were <b>not</b> added because their full forecast demand is already clubbed in another plan for this month &amp; plant (Normal + Special combined):<br>{1}").format(len(clubbed_skipped), msg),
+				title=_("Already Clubbed"),
+				indicator="orange",
+			)
+
+		if fg_skipped:
 			msg = "<br>".join(
-				_("{0} — already in {1} ({2})").format(frappe.bold(ic), club, state)
-				for ic, club, state in skipped
+				_("{0} — FG stock {1} already covers demand {2}").format(
+					frappe.bold(ic), flt(stock), flt(demand)
+				)
+				for ic, stock, demand in fg_skipped
 			)
 			frappe.msgprint(
-				_("{0} item(s) were <b>not</b> added because they are already forecasted in another plan for an overlapping month (same plant &amp; type):<br>{1}").format(len(skipped), msg),
-				title=_("Items Skipped"),
+				_("{0} item(s) were <b>not</b> added because their finished-goods stock already covers the forecast demand:<br>{1}").format(len(fg_skipped), msg),
+				title=_("Items Already In FG"),
 				indicator="orange",
 			)
 
