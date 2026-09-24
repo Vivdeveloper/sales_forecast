@@ -155,6 +155,9 @@ frappe.ui.form.on("Forecast Club", {
 
 		// Fetch live stock + packing for all existing rows on load (display only, no dirty)
 		refresh_all_rows_stock(frm);
+
+		// Highlight the "Get Fetch Material Request Item" button in yellow so it stands out.
+		highlight_fetch_mr_button(frm);
 	},
 
 	validate(frm) {
@@ -759,6 +762,20 @@ function toggle_blender2_week(frm, cdt, cdn, n) {
 		frappe.model.set_value(cdt, cdn, "w" + n + "_batch2", 0);
 	}
 	calculate_totals(frm, cdt, cdn);
+}
+
+// Paint the "Get Fetch Material Request Item" Button field yellow so it is highlighted.
+// The field renders as a <button> at frm.fields_dict.<field>.$input; guard for when it's
+// not on screen yet (hidden by display conditions).
+function highlight_fetch_mr_button(frm) {
+	const field = frm.fields_dict.get_fetch_material_request_item;
+	if (!field || !field.$input) return;
+	field.$input.css({
+		"background-color": "#ffc107",
+		"border-color": "#ffc107",
+		"color": "#000",
+		"font-weight": "600",
+	});
 }
 
 // Blender 1's "No of Batches" is auto = ceil(week's Loose Quantity / Blender 1 Capacity).
