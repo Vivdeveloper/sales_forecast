@@ -372,13 +372,13 @@ function render_week_totals(frm) {
 		return `
 			<table class="table table-bordered" style="margin-bottom:12px;">
 				<thead>
-					<tr class="text-muted">
-						<th style="width:40%;">${heading} (by Vertical)</th>
-						<th class="text-right">Week 1</th>
-						<th class="text-right">Week 2</th>
-						<th class="text-right">Week 3</th>
-						<th class="text-right">Week 4</th>
-						<th class="text-right">Total</th>
+					<tr style="background-color:#e9ecef;font-weight:600;">
+						<th style="width:40%;background-color:#e9ecef;">${heading} (by Vertical)</th>
+						<th class="text-right" style="background-color:#e9ecef;">Week 1</th>
+						<th class="text-right" style="background-color:#e9ecef;">Week 2</th>
+						<th class="text-right" style="background-color:#e9ecef;">Week 3</th>
+						<th class="text-right" style="background-color:#e9ecef;">Week 4</th>
+						<th class="text-right" style="background-color:#e9ecef;">Total</th>
 					</tr>
 				</thead>
 				<tbody>
