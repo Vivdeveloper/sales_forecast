@@ -38,6 +38,8 @@
   "sales_qty_week_4",
   "sales_total_qty",
   "cb_hdr",
+  "secondary_customer",
+  "is_channel_partner",
   "sec_forecast",
   "cb_f2",
   "cb_f3",
@@ -311,6 +313,25 @@
   {
    "fieldname": "cb_hdr",
    "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.is_channel_partner",
+   "description": "Shown only when the selected Customer is a Channel Partner. Pick one of the partner's secondary customers.",
+   "fieldname": "secondary_customer",
+   "fieldtype": "Link",
+   "in_list_view": 0,
+   "label": "Secondary Customer",
+   "options": "Customer"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_channel_partner",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "in_list_view": 0,
+   "label": "Is Channel Partner",
+   "no_copy": 1,
+   "read_only": 1
   },
   {
    "fieldname": "sec_forecast",

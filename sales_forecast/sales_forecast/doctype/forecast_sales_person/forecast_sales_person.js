@@ -13,6 +13,8 @@ frappe.ui.form.on("Forecast Sales Person", {
 		lock_sales_person_for_current_user(frm);
 		update_monthly_target(frm);
 		render_week_totals(frm);
+		setup_secondary_customer_query(frm);
+		init_channel_partner_flags(frm);
 	},
 
 	posting_date(frm) {
@@ -151,6 +153,9 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 		fetch_last_month_sales(frm, cdt, cdn);
 		// Customer drives Rate Per Unit + Rate (Customer Special -> Standard Selling).
 		fetch_customer_rate(frm, cdt, cdn);
+		// If the customer is a Channel Partner, enable + populate the Secondary Customer
+		// dropdown (shown only in the row popup, never as a grid column).
+		update_channel_partner_secondary(frm, cdt, cdn);
 	},
 
 	// Miscellaneous Customer: on tick, fill Rate/Rate Per Unit from the packed good's Standard
@@ -755,5 +760,74 @@ function show_sales_person_info(frm) {
 				);
 			}
 		}
+	});
+}
+
+// ---------------------------------------------------------------------------
+// Channel Partner -> Secondary Customer dropdown
+//
+// When a row's Customer is a Channel Partner (it has secondary customers in its
+// "Secondary Customer" table), the row's Secondary Customer Link field is enabled
+// and its options are limited to that partner's secondary customers. The field is
+// shown ONLY in the row edit popup (in_list_view = 0), not as a grid column, and is
+// gated by depends_on: is_channel_partner.
+// ---------------------------------------------------------------------------
+const SECONDARY_CUSTOMERS_METHOD =
+	"sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person.get_secondary_customers";
+
+function setup_secondary_customer_query(frm) {
+	frm.set_query("secondary_customer", "items", function (doc, cdt, cdn) {
+		const row = locals[cdt][cdn];
+		const list = (frm._sec_cust_cache && frm._sec_cust_cache[row.customer]) || [];
+		// "__none__" guarantees an empty result when the customer isn't a channel partner.
+		return { filters: { name: ["in", list.length ? list : ["__none__"]] } };
+	});
+}
+
+function update_channel_partner_secondary(frm, cdt, cdn) {
+	const row = locals[cdt][cdn];
+	// A customer change invalidates any previous secondary selection.
+	frappe.model.set_value(cdt, cdn, "secondary_customer", "");
+	frappe.model.set_value(cdt, cdn, "is_channel_partner", 0);
+	if (!row.customer) {
+		return;
+	}
+	frappe.call({
+		method: SECONDARY_CUSTOMERS_METHOD,
+		args: { channel_partner: row.customer },
+		callback(r) {
+			const list = (r.message || []).map((d) => d.name);
+			frm._sec_cust_cache = frm._sec_cust_cache || {};
+			frm._sec_cust_cache[row.customer] = list;
+			frappe.model.set_value(cdt, cdn, "is_channel_partner", list.length ? 1 : 0);
+		},
+	});
+}
+
+// On load, rebuild the dropdown cache + channel-partner flag for existing rows so the
+// Secondary Customer field shows correctly without re-picking the customer.
+function init_channel_partner_flags(frm) {
+	frm._sec_cust_cache = frm._sec_cust_cache || {};
+	const customers = [...new Set((frm.doc.items || []).map((d) => d.customer).filter(Boolean))];
+	customers.forEach((cust) => {
+		frappe.call({
+			method: SECONDARY_CUSTOMERS_METHOD,
+			args: { channel_partner: cust },
+			callback(r) {
+				const list = (r.message || []).map((d) => d.name);
+				frm._sec_cust_cache[cust] = list;
+				let changed = false;
+				(frm.doc.items || []).forEach((d) => {
+					if (d.customer === cust) {
+						const flag = list.length ? 1 : 0;
+						if (d.is_channel_partner !== flag) {
+							d.is_channel_partner = flag;
+							changed = true;
+						}
+					}
+				});
+				if (changed) frm.refresh_field("items");
+			},
+		});
 	});
 }

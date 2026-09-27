@@ -472,3 +472,35 @@ def get_monthly_target_summary(sales_person, start_date, end_date):
 
 	return {"target_qty": total_qty, "target_amount": total_amount}
 
+
+
+@frappe.whitelist()
+def get_secondary_customers(channel_partner):
+	"""Return the secondary customers of a Channel Partner customer.
+
+	A customer is treated as a Channel Partner when it has rows in its
+	"Secondary Customer" table (Customer.custom_secondary_customers). Returns a
+	list of {name, customer_name} for the forecast row's Secondary Customer dropdown.
+	Empty list => the selected customer is not a channel partner.
+	"""
+	if not channel_partner:
+		return []
+
+	rows = frappe.get_all(
+		"Secondary Customer",
+		filters={"parenttype": "Customer", "parent": channel_partner},
+		fields=["customer", "customer_name"],
+		order_by="idx asc",
+	)
+	out = []
+	seen = set()
+	for r in rows:
+		cust = r.get("customer")
+		if not cust or cust in seen:
+			continue
+		seen.add(cust)
+		out.append({
+			"name": cust,
+			"customer_name": r.get("customer_name") or frappe.db.get_value("Customer", cust, "customer_name"),
+		})
+	return out
