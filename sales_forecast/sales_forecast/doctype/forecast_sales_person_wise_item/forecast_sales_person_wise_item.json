@@ -11,6 +11,7 @@
   "customer_name",
   "item_code",
   "item_name",
+  "vertical",
   "packed_goods",
   "filling_capacity",
   "rate_per_unit",
@@ -22,20 +23,20 @@
   "loose_material_week_2",
   "loose_material_week_3",
   "loose_material_week_4",
-  "sales_total_qty",
+  "total_week_quantity_loose",
   "sales_amount_week_1",
   "sales_amount_week_2",
   "sales_amount_week_3",
   "sales_amount_week_4",
   "total_sales_amount",
+  "total_month_rate_loose",
   "sales_uom",
   "rate",
-  "total_week_quantity_loose",
-  "total_month_rate_loose",
   "sales_qty_week_1",
   "sales_qty_week_2",
   "sales_qty_week_3",
   "sales_qty_week_4",
+  "sales_total_qty",
   "cb_hdr",
   "sec_forecast",
   "cb_f2",
@@ -81,7 +82,20 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Packing Material",
-   "options": "Item"
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "columns": 1,
+   "description": "Vertical of the selected item (from Item master).",
+   "fetch_from": "item_code.custom_vertical",
+   "fetch_if_empty": 0,
+   "fieldname": "vertical",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Vertical",
+   "options": "Brand",
+   "read_only": 1
   },
   {
    "columns": 1,
@@ -206,11 +220,11 @@
    "read_only": 1
   },
   {
-   "description": "Sum of Loose Material Week 1\u20134 (auto).",
+   "description": "Sum of Week 1\u20134 Total Sales (loose) (auto).",
    "fieldname": "total_week_quantity_loose",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Total Week Quantity (Loose)",
+   "label": "Total Sales",
    "read_only": 1
   },
   {
@@ -251,10 +265,11 @@
    "read_only": 1
   },
   {
+   "description": "Last month's total sales qty (kept for data; replaced in the grid by Total Sales = loose total).",
    "fieldname": "sales_total_qty",
    "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Total Sales",
+   "in_list_view": 0,
+   "label": "Last Month Sales Total Qty",
    "read_only": 1
   },
   {

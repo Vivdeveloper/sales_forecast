@@ -128,6 +128,13 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 		fetch_last_month_sales(frm, cdt, cdn);
 		// Item changed -> packed good cleared above, so the rate has no basis; clear it.
 		fetch_customer_rate(frm, cdt, cdn);
+		// Vertical is fetched from the item (async); re-render the by-vertical totals once it lands.
+		setTimeout(() => render_week_totals(frm), 500);
+	},
+
+	// Vertical changed (fetched from the item) -> re-group the by-vertical total tables.
+	vertical(frm) {
+		render_week_totals(frm);
 	},
 
 	// Customer scopes the sales history -> refetch. Customer and Miscellaneous Customer are
@@ -194,17 +201,23 @@ function recompute_loose_material(frm, cdt, cdn) {
 	recompute_loose_totals(frm, cdt, cdn);
 }
 
-// Total Week Quantity (Loose) = sum of the four loose weeks; Total Month Rate (Loose) =
-// that total × Rate Per Unit (read-only, auto).
+// Derive the loose totals + revenue columns for a row (read-only, auto):
+//   Total Sales (total_week_quantity_loose) = sum of the four Week N Total Sales (loose).
+//   Week N Total Revenue (sales_amount_week_N) = Week N Total Sales × Rate Per Unit.
+//   Total Revenue (total_sales_amount)         = Total Sales × Rate Per Unit.
+//   Total Month Rate (Loose)                   = Total Sales × Rate Per Unit.
 function recompute_loose_totals(frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
-	const total_loose =
-		flt(row.loose_material_week_1) +
-		flt(row.loose_material_week_2) +
-		flt(row.loose_material_week_3) +
-		flt(row.loose_material_week_4);
+	const rpu = flt(row.rate_per_unit);
+	let total_loose = 0;
+	[1, 2, 3, 4].forEach((n) => {
+		const lw = flt(row[`loose_material_week_${n}`]);
+		total_loose += lw;
+		frappe.model.set_value(cdt, cdn, `sales_amount_week_${n}`, lw * rpu);
+	});
 	frappe.model.set_value(cdt, cdn, "total_week_quantity_loose", total_loose);
-	frappe.model.set_value(cdt, cdn, "total_month_rate_loose", total_loose * flt(row.rate_per_unit));
+	frappe.model.set_value(cdt, cdn, "total_sales_amount", total_loose * rpu);
+	frappe.model.set_value(cdt, cdn, "total_month_rate_loose", total_loose * rpu);
 }
 
 // Fill the row's Rate Per Unit + Rate from the PACKED GOOD's Item Price. Live, on change.
@@ -245,13 +258,14 @@ function fetch_customer_rate(frm, cdt, cdn) {
 // so the pipeline figures are keyed off packed_goods. No packed good -> clear the columns.
 function fetch_last_month_sales(frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
+	// Only the last-month actual Sales QTY columns come from invoices. Revenue columns
+	// (Week N Total Revenue / Total Revenue) are forecast = loose × Rate Per Unit and are
+	// handled by recompute_loose_totals — never touched here.
 	if (!row.packed_goods) {
 		[1, 2, 3, 4].forEach((n) => {
 			frappe.model.set_value(cdt, cdn, `sales_qty_week_${n}`, 0);
-			frappe.model.set_value(cdt, cdn, `sales_amount_week_${n}`, 0);
 		});
 		frappe.model.set_value(cdt, cdn, "sales_total_qty", 0);
-		frappe.model.set_value(cdt, cdn, "total_sales_amount", 0);
 		return;
 	}
 	frappe.call({
@@ -265,13 +279,10 @@ function fetch_last_month_sales(frm, cdt, cdn) {
 		callback: (r) => {
 			const d = r.message || {};
 			const q = d.qty || {};
-			const a = d.amount || {};
 			[1, 2, 3, 4].forEach((n) => {
 				frappe.model.set_value(cdt, cdn, `sales_qty_week_${n}`, flt(q[n]));
-				frappe.model.set_value(cdt, cdn, `sales_amount_week_${n}`, flt(a[n]));
 			});
 			frappe.model.set_value(cdt, cdn, "sales_total_qty", flt(q.total));
-			frappe.model.set_value(cdt, cdn, "total_sales_amount", flt(a.total));
 		},
 	});
 }
@@ -288,47 +299,81 @@ function setup_packed_goods_filter(frm) {
 	});
 }
 
-// Show live, UI-only week-wise total tables below the Items table (not data rows):
-//   1. Packed Goods Week-wise Total  — sum of week_1..4 (packed qty) across all items
-//   2. Loose Material Week-wise Total — sum of loose_material_week_1..4 across all items
-//   3. Amount Week-wise Total         — per week: sum of (loose qty × rate) across all items
-// Each shows 0 when there is nothing to add.
+// Show live, UI-only week-wise total tables below the Items table (not data rows), CLUBBED
+// BY VERTICAL — one row per unique vertical, plus a grand-total row:
+//   1. Packed Goods Week-wise Total  — sum of week_1..4 (packed qty)
+//   2. Loose Material Week-wise Total — sum of loose_material_week_1..4 (Week N Total Sales)
+//   3. Amount Week-wise Total         — per week: sum of (loose qty × Rate Per Unit) = revenue
+// Each cell is 0 when there is nothing to add.
 function render_week_totals(frm) {
 	const wrapper = frm.fields_dict.week_totals_html && frm.fields_dict.week_totals_html.$wrapper;
 	if (!wrapper) return;
 
-	const packed = { week_1: 0, week_2: 0, week_3: 0, week_4: 0 };
-	const loose = { week_1: 0, week_2: 0, week_3: 0, week_4: 0 };
-	const amount = { week_1: 0, week_2: 0, week_3: 0, week_4: 0 };
+	const NO_VERTICAL = "(No Vertical)";
+	const zero = () => ({ week_1: 0, week_2: 0, week_3: 0, week_4: 0 });
+	// vertical -> { packed, loose, amount }
+	const by_vertical = {};
+	const ensure = (v) => {
+		if (!by_vertical[v]) {
+			by_vertical[v] = { packed: zero(), loose: zero(), amount: zero() };
+		}
+		return by_vertical[v];
+	};
+
+	let packed_grand_all = 0;
 	(frm.doc.items || []).forEach((row) => {
-		const rate = flt(row.rate);
+		const v = row.vertical || NO_VERTICAL;
+		const g = ensure(v);
+		const rpu = flt(row.rate_per_unit);
 		[1, 2, 3, 4].forEach((n) => {
-			packed[`week_${n}`] += flt(row[`week_${n}`]);
+			const pk = flt(row[`week_${n}`]);
 			const lw = flt(row[`loose_material_week_${n}`]);
-			loose[`week_${n}`] += lw;
-			amount[`week_${n}`] += lw * rate;   // loose quantity × rate, per week
+			g.packed[`week_${n}`] += pk;
+			g.loose[`week_${n}`] += lw;
+			g.amount[`week_${n}`] += lw * rpu;   // revenue = loose qty × Rate Per Unit, per week
+			packed_grand_all += pk;
 		});
 	});
 
 	const fmt = (v) => format_number(v, null, 3);
 	const fmt2 = (v) => format_number(v, null, 2);
-	const packed_grand = packed.week_1 + packed.week_2 + packed.week_3 + packed.week_4;
 
-	// Actual Qty field = grand total of all PACKED weeks. Assign directly (server validate
-	// persists it) so simply viewing a saved doc doesn't mark it dirty.
-	if (frm.doc.actual_qty !== packed_grand) {
-		frm.doc.actual_qty = packed_grand;
+	// Actual Qty field = grand total of all PACKED weeks (across every vertical). Assign
+	// directly (server validate persists it) so viewing a saved doc doesn't mark it dirty.
+	if (frm.doc.actual_qty !== packed_grand_all) {
+		frm.doc.actual_qty = packed_grand_all;
 		frm.refresh_field('actual_qty');
 	}
 
-	// one table = heading + a "Sum of all items" row across the 4 weeks + a grand total
-	const total_table = (heading, t, cellfmt) => {
-		const grand = t.week_1 + t.week_2 + t.week_3 + t.week_4;
+	const verticals = Object.keys(by_vertical).sort();
+
+	// One table = heading + one row per vertical + a grand-total row across the 4 weeks.
+	const total_table = (heading, pick, cellfmt) => {
+		const grand = zero();
+		const body = verticals
+			.map((v) => {
+				const t = by_vertical[v][pick];
+				const rowtot = t.week_1 + t.week_2 + t.week_3 + t.week_4;
+				[1, 2, 3, 4].forEach((n) => {
+					grand[`week_${n}`] += t[`week_${n}`];
+				});
+				return `
+					<tr>
+						<td>${frappe.utils.escape_html(v)}</td>
+						<td class="text-right">${cellfmt(t.week_1)}</td>
+						<td class="text-right">${cellfmt(t.week_2)}</td>
+						<td class="text-right">${cellfmt(t.week_3)}</td>
+						<td class="text-right">${cellfmt(t.week_4)}</td>
+						<td class="text-right">${cellfmt(rowtot)}</td>
+					</tr>`;
+			})
+			.join("");
+		const gtot = grand.week_1 + grand.week_2 + grand.week_3 + grand.week_4;
 		return `
 			<table class="table table-bordered" style="margin-bottom:12px;">
 				<thead>
 					<tr class="text-muted">
-						<th style="width:40%;">${heading}</th>
+						<th style="width:40%;">${heading} (by Vertical)</th>
 						<th class="text-right">Week 1</th>
 						<th class="text-right">Week 2</th>
 						<th class="text-right">Week 3</th>
@@ -337,13 +382,14 @@ function render_week_totals(frm) {
 					</tr>
 				</thead>
 				<tbody>
+					${body}
 					<tr>
-						<td class="text-muted">Sum of all items</td>
-						<td class="text-right"><b>${cellfmt(t.week_1)}</b></td>
-						<td class="text-right"><b>${cellfmt(t.week_2)}</b></td>
-						<td class="text-right"><b>${cellfmt(t.week_3)}</b></td>
-						<td class="text-right"><b>${cellfmt(t.week_4)}</b></td>
-						<td class="text-right"><b>${cellfmt(grand)}</b></td>
+						<td class="text-muted"><b>Grand Total</b></td>
+						<td class="text-right"><b>${cellfmt(grand.week_1)}</b></td>
+						<td class="text-right"><b>${cellfmt(grand.week_2)}</b></td>
+						<td class="text-right"><b>${cellfmt(grand.week_3)}</b></td>
+						<td class="text-right"><b>${cellfmt(grand.week_4)}</b></td>
+						<td class="text-right"><b>${cellfmt(gtot)}</b></td>
 					</tr>
 				</tbody>
 			</table>`;
@@ -351,9 +397,9 @@ function render_week_totals(frm) {
 
 	wrapper.html(`
 		<div class="week-totals" style="margin-top:8px;">
-			${total_table('Packed Goods Week-wise Total', packed, fmt)}
-			${total_table('Loose Material Week-wise Total', loose, fmt)}
-			${total_table('Amount Week-wise Total', amount, fmt2)}
+			${total_table('Total Pack Qty Week-wise Total', 'packed', fmt)}
+			${total_table('Total Sales Weekwise Total', 'loose', fmt)}
+			${total_table('Total Revenue Week-wise Total', 'amount', fmt2)}
 		</div>
 	`);
 

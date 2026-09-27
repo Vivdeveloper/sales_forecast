@@ -19,28 +19,35 @@ class ForecastSalesPerson(Document):
 		self.set_forecast_and_difference()
 
 	def set_loose_material(self):
-		"""Loose Material Week N = Filling Capacity × Week N (per item row). Also roll up
-		Total Week Quantity (Loose) = sum of the four loose weeks, and Total Month Rate
-		(Loose) = that total × Rate."""
+		"""Per item row, derive the loose-material qty and revenue columns:
+		  * Week N Total Sales  (loose_material_week_N) = Filling Capacity × Week N
+		  * Total Sales         (total_week_quantity_loose) = sum of the four loose weeks
+		  * Week N Total Revenue(sales_amount_week_N)  = Week N Total Sales × Rate Per Unit
+		  * Total Revenue       (total_sales_amount)   = Total Sales × Rate Per Unit
+		  * Total Month Rate (Loose) (total_month_rate_loose) = Total Sales × Rate Per Unit
+		Revenue is qty × Rate Per Unit (the per-unit price for loose stock)."""
 		from frappe.utils import flt
 
 		for row in self.items or []:
 			fc = flt(row.get("filling_capacity"))
+			rpu = flt(row.get("rate_per_unit"))
 			total_loose = 0.0
 			for n in (1, 2, 3, 4):
 				val = fc * flt(row.get(f"week_{n}"))
 				row.set(f"loose_material_week_{n}", val)
+				row.set(f"sales_amount_week_{n}", val * rpu)  # Week N Total Revenue
 				total_loose += val
 			row.total_week_quantity_loose = total_loose
-			row.total_month_rate_loose = total_loose * flt(row.get("rate_per_unit"))
+			row.total_sales_amount = total_loose * rpu          # Total Revenue
+			row.total_month_rate_loose = total_loose * rpu
 
 	def set_last_month_sales(self):
-		"""Populate each row's week-wise Sales Qty and Sales Amount (without GST) from LAST
-		MONTH's submitted Sales Invoices for the row's PACKED GOODS item (+customer). The
-		actual sales/GRN/invoice history is tracked against the packed good, not the main
-		(finished) item, so the pipeline figures are pulled for packed_goods. 'Last month' =
-		the calendar month before the forecast start date. Rows without a Packed Goods are
-		zeroed (nothing to reconcile yet)."""
+		"""Populate each row's week-wise last-month Sales QTY (the "Sales Qty Week N" columns)
+		from submitted Sales Invoices for the row's PACKED GOODS item (+customer). 'Last month'
+		= the calendar month before the forecast start date. Rows without a Packed Goods are
+		zeroed. NOTE: the revenue columns (Week N Total Revenue / Total Revenue) are NOT set
+		here — they are forecast revenue = loose qty × Rate Per Unit, computed in
+		set_loose_material(); this method only fills the last-month actual sales-qty columns."""
 		from frappe.utils import flt
 
 		ref = self.forecast_start_date or self.posting_date
@@ -48,17 +55,13 @@ class ForecastSalesPerson(Document):
 			if not row.get("packed_goods"):
 				for n in (1, 2, 3, 4):
 					row.set(f"sales_qty_week_{n}", 0)
-					row.set(f"sales_amount_week_{n}", 0)
 				row.sales_total_qty = 0
-				row.total_sales_amount = 0
 				continue
 			data = get_last_month_sales(row.packed_goods, row.customer, ref, self.company)
-			q, a = data["qty"], data["amount"]
+			q = data["qty"]
 			for n in (1, 2, 3, 4):
 				row.set(f"sales_qty_week_{n}", flt(q.get(str(n))))
-				row.set(f"sales_amount_week_{n}", flt(a.get(str(n))))
 			row.sales_total_qty = flt(q.get("total"))
-			row.total_sales_amount = flt(a.get("total"))
 
 	def set_item_sales_uom(self):
 		"""Fill each item's Sales UOM from the item master (this bench labels
@@ -468,3 +471,4 @@ def get_monthly_target_summary(sales_person, start_date, end_date):
 			total_amount += flt(r.target_amount)
 
 	return {"target_qty": total_qty, "target_amount": total_amount}
+
