@@ -533,11 +533,12 @@ frappe.ui.form.on("Forecast Club Item", {
 	w4_plan_qty(frm, cdt, cdn) { cap_plan_qty(frm, cdt, cdn, 'w4_plan_qty', 'w4_batch_qty', 'Week 4'); },
 
 	// Blender selection fetches batch_capacity_N (fetch_from); once it settles, auto-set
-	// Blender 1's No of Batches (= ceil(loose / capacity)) then recompute.
-	blender_week_1(frm, cdt, cdn) { setTimeout(() => { autoset_b1_batches(frm, cdt, cdn, 1); calculate_totals(frm, cdt, cdn); }, 500); },
-	blender_week_2(frm, cdt, cdn) { setTimeout(() => { autoset_b1_batches(frm, cdt, cdn, 2); calculate_totals(frm, cdt, cdn); }, 500); },
-	blender_week_3(frm, cdt, cdn) { setTimeout(() => { autoset_b1_batches(frm, cdt, cdn, 3); calculate_totals(frm, cdt, cdn); }, 500); },
-	blender_week_4(frm, cdt, cdn) { setTimeout(() => { autoset_b1_batches(frm, cdt, cdn, 4); calculate_totals(frm, cdt, cdn); }, 500); },
+	// Blender 1's No of Batches (= ceil(loose / capacity)) then recompute. CLEARING the
+	// blender resets every field that was filled after it was selected.
+	blender_week_1(frm, cdt, cdn) { on_blender_week_change(frm, cdt, cdn, 1); },
+	blender_week_2(frm, cdt, cdn) { on_blender_week_change(frm, cdt, cdn, 2); },
+	blender_week_3(frm, cdt, cdn) { on_blender_week_change(frm, cdt, cdn, 3); },
+	blender_week_4(frm, cdt, cdn) { on_blender_week_change(frm, cdt, cdn, 4); },
 
 	// Blender 2 (only when "Use 2nd Blender" is on) — same recompute triggers as Blender 1.
 	w1_batch2(frm, cdt, cdn) { calculate_totals(frm, cdt, cdn); },
@@ -788,6 +789,33 @@ function autoset_b1_batches(frm, cdt, cdn, n) {
 	if (cap > 0) {
 		frappe.model.set_value(cdt, cdn, 'w' + n + '_batch', Math.ceil(flt(row['week_' + n]) / cap));
 	}
+}
+
+// Blender picked -> auto-fill; blender cleared -> reset everything filled after it.
+function on_blender_week_change(frm, cdt, cdn, n) {
+	const row = locals[cdt][cdn];
+	if (row && !row['blender_week_' + n]) {
+		reset_blender_week(frm, cdt, cdn, n);
+		return;
+	}
+	setTimeout(() => { autoset_b1_batches(frm, cdt, cdn, n); calculate_totals(frm, cdt, cdn); }, 500);
+}
+
+// Clearing "Blender 1 Week N" empties every field that was filled off the blender for that
+// week — Blender 1 Capacity / No of Batches / Batch Qty / Plan Qty AND all Blender 2 fields
+// (toggle, blender, capacity, batches, batch qty) — then recomputes the totals.
+function reset_blender_week(frm, cdt, cdn, n) {
+	frappe.model.set_value(cdt, cdn, 'batch_capacity_' + n, '');
+	frappe.model.set_value(cdt, cdn, 'w' + n + '_batch', 0);
+	frappe.model.set_value(cdt, cdn, 'w' + n + '_batch_qty', 0);
+	frappe.model.set_value(cdt, cdn, 'w' + n + '_plan_qty', 0);
+	// Blender 2 for this week
+	frappe.model.set_value(cdt, cdn, 'enable_blender_2_w' + n, 0);
+	frappe.model.set_value(cdt, cdn, 'blender2_week_' + n, '');
+	frappe.model.set_value(cdt, cdn, 'batch_capacity2_' + n, '');
+	frappe.model.set_value(cdt, cdn, 'w' + n + '_batch2', 0);
+	frappe.model.set_value(cdt, cdn, 'w' + n + '_batch_qty2', 0);
+	calculate_totals(frm, cdt, cdn);
 }
 
 function calculate_totals(frm, cdt, cdn) {
