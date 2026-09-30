@@ -316,19 +316,21 @@ function render_week_totals(frm) {
 
 	const NO_VERTICAL = "(No Vertical)";
 	const zero = () => ({ week_1: 0, week_2: 0, week_3: 0, week_4: 0 });
-	// vertical -> { packed, loose, amount }
-	const by_vertical = {};
-	const ensure = (v) => {
-		if (!by_vertical[v]) {
-			by_vertical[v] = { packed: zero(), loose: zero(), amount: zero() };
+	// key "vertical||packsize" -> { vertical, pack_size, packed, loose, amount }
+	const groups = {};
+	const ensure = (vertical, pack_size) => {
+		const key = vertical + "||" + pack_size;
+		if (!groups[key]) {
+			groups[key] = { vertical, pack_size, packed: zero(), loose: zero(), amount: zero() };
 		}
-		return by_vertical[v];
+		return groups[key];
 	};
 
 	let packed_grand_all = 0;
 	(frm.doc.items || []).forEach((row) => {
 		const v = row.vertical || NO_VERTICAL;
-		const g = ensure(v);
+		const ps = flt(row.filling_capacity);   // Pack Size Qty
+		const g = ensure(v, ps);
 		const rpu = flt(row.rate_per_unit);
 		[1, 2, 3, 4].forEach((n) => {
 			const pk = flt(row[`week_${n}`]);
@@ -343,28 +345,35 @@ function render_week_totals(frm) {
 	const fmt = (v) => format_number(v, null, 3);
 	const fmt2 = (v) => format_number(v, null, 2);
 
-	// Actual Qty field = grand total of all PACKED weeks (across every vertical). Assign
+	// Actual Qty field = grand total of all PACKED weeks (across every group). Assign
 	// directly (server validate persists it) so viewing a saved doc doesn't mark it dirty.
 	if (frm.doc.actual_qty !== packed_grand_all) {
 		frm.doc.actual_qty = packed_grand_all;
 		frm.refresh_field('actual_qty');
 	}
 
-	const verticals = Object.keys(by_vertical).sort();
+	// Sort by Vertical (name), then by Pack Size, so same-vertical pack sizes group together.
+	const keys = Object.keys(groups).sort((a, b) => {
+		const A = groups[a], B = groups[b];
+		if (A.vertical !== B.vertical) return A.vertical < B.vertical ? -1 : 1;
+		return A.pack_size - B.pack_size;
+	});
 
-	// One table = heading + one row per vertical + a grand-total row across the 4 weeks.
+	// One table = heading + one row per (Vertical + Pack Size) + a grand-total row.
 	const total_table = (heading, pick, cellfmt) => {
 		const grand = zero();
-		const body = verticals
-			.map((v) => {
-				const t = by_vertical[v][pick];
+		const body = keys
+			.map((k) => {
+				const grp = groups[k];
+				const t = grp[pick];
 				const rowtot = t.week_1 + t.week_2 + t.week_3 + t.week_4;
 				[1, 2, 3, 4].forEach((n) => {
 					grand[`week_${n}`] += t[`week_${n}`];
 				});
 				return `
 					<tr>
-						<td>${frappe.utils.escape_html(v)}</td>
+						<td>${frappe.utils.escape_html(grp.vertical)}</td>
+						<td class="text-right">${fmt(grp.pack_size)}</td>
 						<td class="text-right">${cellfmt(t.week_1)}</td>
 						<td class="text-right">${cellfmt(t.week_2)}</td>
 						<td class="text-right">${cellfmt(t.week_3)}</td>
@@ -378,7 +387,8 @@ function render_week_totals(frm) {
 			<table class="table table-bordered" style="margin-bottom:12px;">
 				<thead>
 					<tr style="background-color:#e9ecef;font-weight:600;">
-						<th style="width:40%;background-color:#e9ecef;">${heading} (by Vertical)</th>
+						<th style="width:32%;background-color:#e9ecef;">${heading} (by Vertical + Pack Size)</th>
+						<th class="text-right" style="background-color:#e9ecef;">Pack Size</th>
 						<th class="text-right" style="background-color:#e9ecef;">Week 1</th>
 						<th class="text-right" style="background-color:#e9ecef;">Week 2</th>
 						<th class="text-right" style="background-color:#e9ecef;">Week 3</th>
@@ -389,7 +399,7 @@ function render_week_totals(frm) {
 				<tbody>
 					${body}
 					<tr>
-						<td class="text-muted"><b>Grand Total</b></td>
+						<td class="text-muted" colspan="2"><b>Grand Total</b></td>
 						<td class="text-right"><b>${cellfmt(grand.week_1)}</b></td>
 						<td class="text-right"><b>${cellfmt(grand.week_2)}</b></td>
 						<td class="text-right"><b>${cellfmt(grand.week_3)}</b></td>
