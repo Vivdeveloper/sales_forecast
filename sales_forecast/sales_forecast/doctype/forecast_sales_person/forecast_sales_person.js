@@ -225,11 +225,12 @@ function recompute_loose_totals(frm, cdt, cdn) {
 	frappe.model.set_value(cdt, cdn, "total_month_rate_loose", total_loose * rpu);
 }
 
-// Fill the row's Rate Per Unit + Rate from the PACKED GOOD's Item Price. Live, on change.
-// Preference:
-//   - Real Customer selected -> that customer's "Customer Special" price, else Standard Selling.
-//   - Miscellaneous Customer ticked (no specific customer) -> Standard Selling (company rate).
-// No packed good -> no pricing basis, clear both. Nothing found in Item Price -> keep as-is.
+// Fill the row's Rate Per Unit + Rate. Live, on change.
+//   - Real Customer + Packing Material -> the MOST RECENT Sales Invoice for that exact
+//     (customer + packing material) combination. If no such invoice exists, the row is
+//     switched to Miscellaneous Customer (Standard Selling company rate) instead.
+//   - Miscellaneous Customer (no specific customer) -> Standard Selling (company rate).
+// No packed good -> no pricing basis, clear both.
 function fetch_customer_rate(frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
 	// No packed good yet -> nothing to price against, clear.
@@ -238,21 +239,59 @@ function fetch_customer_rate(frm, cdt, cdn) {
 		frappe.model.set_value(cdt, cdn, "rate", 0);
 		return;
 	}
-	// Misc customer has no specific customer -> company (Standard Selling) rate only.
+	// Real customer -> price from the last invoice for this (customer + packing material).
+	if (row.customer && !row.miscellaneous_customer) {
+		fetch_rate_from_last_invoice(frm, cdt, cdn);
+		return;
+	}
+	// Miscellaneous / no customer -> Standard Selling (company) rate from the Item Price.
+	fetch_rate_from_item_price(frm, cdt, cdn);
+}
+
+// Standard Selling (company) rate from the PACKED GOOD's Item Price — used for Miscellaneous
+// Customer rows (and as the fallback when a customer has no past invoice).
+function fetch_rate_from_item_price(frm, cdt, cdn) {
+	const row = locals[cdt][cdn];
+	if (!row.packed_goods) return;
 	const customer = row.miscellaneous_customer ? "" : (row.customer || "");
 	frappe.call({
 		method: "sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person.get_customer_item_rate",
 		args: { item_code: row.packed_goods, customer: customer },
 		callback: (r) => {
 			const d = r.message || {};
-			// Nothing found -> keep whatever is already there.
 			if (d.rate_per_unit === undefined && d.rate === undefined) return;
 			frappe.model.set_value(cdt, cdn, "rate_per_unit", flt(d.rate_per_unit));
 			frappe.model.set_value(cdt, cdn, "rate", flt(d.rate));
-			// Rate feeds Total Month Rate (Loose) -> recompute it, then re-render the Amount
-			// Week-wise Total + Forecast/Difference Amount so pricing changes reflect live.
 			recompute_loose_totals(frm, cdt, cdn);
 			render_week_totals(frm);
+		},
+	});
+}
+
+// Most recent Sales Invoice rate + rate-per-unit for this (customer + packing material). If
+// none is found, auto-tick Miscellaneous Customer so the row falls back to Standard Selling.
+function fetch_rate_from_last_invoice(frm, cdt, cdn) {
+	const row = locals[cdt][cdn];
+	frappe.call({
+		method: "sales_forecast.sales_forecast.doctype.forecast_sales_person.forecast_sales_person.get_last_invoice_rate",
+		args: { customer: row.customer, item_code: row.packed_goods },
+		callback: (r) => {
+			const d = r.message || {};
+			if (d.found) {
+				frappe.model.set_value(cdt, cdn, "rate_per_unit", flt(d.rate_per_unit));
+				frappe.model.set_value(cdt, cdn, "rate", flt(d.rate));
+				recompute_loose_totals(frm, cdt, cdn);
+				render_week_totals(frm);
+			} else {
+				// No past invoice for this customer + packing material -> treat as misc customer.
+				frappe.show_alert({
+					message: __("No past invoice for {0} + {1}. Switched to Miscellaneous Customer (Standard Selling rate).",
+						[row.customer, row.packed_goods]),
+					indicator: "orange",
+				});
+				// Ticking misc clears the customer and fetches the Standard Selling rate.
+				frappe.model.set_value(cdt, cdn, "miscellaneous_customer", 1);
+			}
 		},
 	});
 }

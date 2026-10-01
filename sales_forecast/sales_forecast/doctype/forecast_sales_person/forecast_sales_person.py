@@ -409,6 +409,43 @@ def get_customer_item_rate(item_code, customer=None):
 	}
 
 
+@frappe.whitelist()
+def get_last_invoice_rate(customer, item_code):
+	"""Rate + Rate Per Unit from the MOST RECENT submitted Sales Invoice for this exact
+	(customer + packing material) combination. `item_code` is the PACKED GOOD (packing
+	material), which is the item_code on the Sales Invoice line.
+
+	Returns {"found": 1, "rate": .., "rate_per_unit": ..} when an invoice exists, else
+	{"found": 0} — the caller then switches the row to Miscellaneous Customer."""
+	from frappe.utils import flt
+
+	if not customer or not item_code:
+		return {"found": 0}
+
+	rows = frappe.db.sql(
+		"""
+		SELECT sii.rate AS rate, sii.custom_rate_in_kg AS rate_per_unit
+		FROM `tabSales Invoice Item` sii
+		INNER JOIN `tabSales Invoice` si ON si.name = sii.parent
+		WHERE si.docstatus = 1
+		  AND si.customer = %(customer)s
+		  AND sii.item_code = %(item)s
+		ORDER BY si.posting_date DESC, si.posting_time DESC, si.creation DESC
+		LIMIT 1
+		""",
+		{"customer": customer, "item": item_code},
+		as_dict=True,
+	)
+	if not rows:
+		return {"found": 0}
+
+	return {
+		"found": 1,
+		"rate": flt(rows[0].rate),
+		"rate_per_unit": flt(rows[0].rate_per_unit),
+	}
+
+
 MONTH_NAMES = [
 	"January", "February", "March", "April", "May", "June",
 	"July", "August", "September", "October", "November", "December",
