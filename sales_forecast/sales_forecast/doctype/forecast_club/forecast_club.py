@@ -868,7 +868,6 @@ class ForecastClub(Document):
 		# Month x Plant, subtract what other (non-cancelled) clubs already took, per week —
 		# Normal and Special share one pool. A fully-covered item is left out entirely.
 		already_clubbed = self.get_already_clubbed_qty()
-		fg_skipped = []       # items already covered by finished-goods stock ("already in FG")
 		clubbed_skipped = []  # items whose full demand is already clubbed elsewhere
 
 		# Add aggregated items to the items child table
@@ -881,20 +880,13 @@ class ForecastClub(Document):
 				if manufacturing_location != plant_warehouse:
 					continue
 
-			# Skip items whose finished-goods stock already covers the forecast demand
-			# ("already in FG" -> nothing to plan). FG stock = the same "FG Company Stock"
-			# shown on the row: loose stock across the FG warehouses + packing loose qty.
+			# NOTE: Items whose finished-goods stock already covers the forecast demand are
+			# NO LONGER auto-skipped — the planner decides whether to plan them, so every
+			# forecast item is added regardless of FG coverage. (Auto-skip removed on request.)
 			total_demand = (
 				flt(item_data["week_1"]) + flt(item_data["week_2"])
 				+ flt(item_data["week_3"]) + flt(item_data["week_4"])
 			)
-			fg_stock = (
-				self._get_item_stock_in_warehouses(item_data["item_code"], FG_COMPANY_STOCK_WAREHOUSES)
-				+ self._get_total_packing_loose_qty(item_data["item_code"])
-			)
-			if total_demand > 0 and fg_stock >= total_demand:
-				fg_skipped.append((item_data["item_code"], fg_stock, total_demand))
-				continue
 
 			# Incremental: this club's week qty = total forecast this week - already clubbed
 			# by other clubs (never negative). A brand-new item has nothing subtracted.
@@ -937,19 +929,6 @@ class ForecastClub(Document):
 			frappe.msgprint(
 				_("{0} item(s) were <b>not</b> added because their full forecast demand is already clubbed in another plan for this month &amp; plant (Normal + Special combined):<br>{1}").format(len(clubbed_skipped), msg),
 				title=_("Already Clubbed"),
-				indicator="orange",
-			)
-
-		if fg_skipped:
-			msg = "<br>".join(
-				_("{0} — FG stock {1} already covers demand {2}").format(
-					frappe.bold(ic), flt(stock), flt(demand)
-				)
-				for ic, stock, demand in fg_skipped
-			)
-			frappe.msgprint(
-				_("{0} item(s) were <b>not</b> added because their finished-goods stock already covers the forecast demand:<br>{1}").format(len(fg_skipped), msg),
-				title=_("Items Already In FG"),
 				indicator="orange",
 			)
 
