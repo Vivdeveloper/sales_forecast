@@ -877,7 +877,14 @@ function show_forecast_status_dialog(frm) {
 			rows.forEach((x) => { if (x.created) created += 1; });
 			let body = "";
 			rows.forEach((x) => {
-				const color = x.created ? "green" : "red";
+				// Not Created -> red, Draft -> orange (distinct, in-progress), any other
+				// created state (Submitted, Approved, …) -> green.
+				let color = "green";
+				if (!x.created) {
+					color = "red";
+				} else if (x.status === "Draft") {
+					color = "yellow";
+				}
 				// Show each person's OWN forecast period (they may have filed a sub-range like
 				// 10–20, not the full month), instead of a single date range in the heading.
 				let period = "-";
