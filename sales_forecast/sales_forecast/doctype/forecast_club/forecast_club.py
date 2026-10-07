@@ -868,7 +868,7 @@ class ForecastClub(Document):
 		# Month x Plant, subtract what other (non-cancelled) clubs already took, per week —
 		# Normal and Special share one pool. A fully-covered item is left out entirely.
 		already_clubbed = self.get_already_clubbed_qty()
-		clubbed_skipped = []  # items whose full demand is already clubbed elsewhere
+		already_clubbed_items = []  # items whose full demand is already clubbed elsewhere (still added, for info)
 
 		# Add aggregated items to the items child table
 		for item_data in items_dict.values():
@@ -896,9 +896,10 @@ class ForecastClub(Document):
 				taken = already_clubbed.get(item_data["item_code"], {})
 				new_weeks = {n: max(0.0, flt(item_data[f"week_{n}"]) - flt(taken.get(n))) for n in (1, 2, 3, 4)}
 				if sum(new_weeks.values()) <= 0:
-					# Whole demand is already accounted for in other clubs -> nothing new to add.
-					clubbed_skipped.append(item_data["item_code"])
-					continue
+					# Whole demand is already clubbed in other plans -> no NEW qty to add. Still
+					# ADD the row (with 0 new weekly qty) so the planner can review and edit it if
+					# they want to plan more; just flag it for the "Already Clubbed" notice.
+					already_clubbed_items.append(item_data["item_code"])
 			else:
 				new_weeks = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
 
@@ -924,10 +925,10 @@ class ForecastClub(Document):
 		plant_note = f" for {self.plant}" if self.plant else ""
 		frappe.msgprint(f"Fetched {len(self.items)} items{plant_note} from {len(forecast_docs)} sales forecasts")
 
-		if clubbed_skipped:
-			msg = "<br>".join(frappe.bold(ic) for ic in clubbed_skipped)
+		if already_clubbed_items:
+			msg = "<br>".join(frappe.bold(ic) for ic in already_clubbed_items)
 			frappe.msgprint(
-				_("{0} item(s) were <b>not</b> added because their full forecast demand is already clubbed in another plan for this month &amp; plant (Normal + Special combined):<br>{1}").format(len(clubbed_skipped), msg),
+				_("{0} item(s) already have their full forecast demand clubbed in another plan for this month &amp; plant (Normal + Special combined). They have been added with <b>0</b> new quantity — edit them if you want to plan more:<br>{1}").format(len(already_clubbed_items), msg),
 				title=_("Already Clubbed"),
 				indicator="orange",
 			)
