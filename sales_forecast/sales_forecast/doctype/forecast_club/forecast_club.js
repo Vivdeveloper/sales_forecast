@@ -883,7 +883,7 @@ function show_forecast_status_dialog(frm) {
 				if (!x.created) {
 					color = "red";
 				} else if (x.status === "Draft") {
-					color = "yellow";
+					color = "orange";
 				}
 				// Show each person's OWN forecast period (they may have filed a sub-range like
 				// 10–20, not the full month), instead of a single date range in the heading.
