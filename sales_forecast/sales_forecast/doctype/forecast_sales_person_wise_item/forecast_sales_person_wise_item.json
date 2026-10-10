@@ -242,28 +242,28 @@
    "fieldname": "sales_qty_week_1",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Sales Qty Week 1",
+   "label": "Last Month Sales Qty Week 1",
    "read_only": 1
   },
   {
    "fieldname": "sales_qty_week_2",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Sales Qty Week 2",
+   "label": "Last Month Sales Qty Week 2",
    "read_only": 1
   },
   {
    "fieldname": "sales_qty_week_3",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Sales Qty Week 3",
+   "label": "Last Month Sales Qty Week 3",
    "read_only": 1
   },
   {
    "fieldname": "sales_qty_week_4",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Sales Qty Week 4",
+   "label": "Last Month Sales Qty Week 4",
    "read_only": 1
   },
   {
@@ -279,28 +279,28 @@
    "fieldname": "sales_amount_week_1",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Week 1 Total Revenue",
+   "label": "Week 1 Revenue",
    "read_only": 1
   },
   {
    "fieldname": "sales_amount_week_2",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Week 2 Total Revenue",
+   "label": "Week 2 Revenue",
    "read_only": 1
   },
   {
    "fieldname": "sales_amount_week_3",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Week 3 Total Revenue",
+   "label": "Week 3 Revenue",
    "read_only": 1
   },
   {
    "fieldname": "sales_amount_week_4",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Week 4 Total Revenue",
+   "label": "Week 4 Revenue",
    "read_only": 1
   },
   {
