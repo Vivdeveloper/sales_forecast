@@ -658,7 +658,17 @@ function validate_forecast_date(frm, fieldname) {
 	}
 }
 
+// The Customer dropdown must only ever offer Channel Partner and Primary customers
+// (never Secondary or other groups) — per management.
+const FORECAST_CUSTOMER_GROUP_FILTER = ["Customer", "customer_group", "in", ["Channel Partner", "Primary"]];
+
 function setup_item_customer_filters(frm) {
+	// Base restriction: Channel Partner + Primary only — applied even before a Sales
+	// Person is chosen (the Sales-Person-wise list below narrows it further).
+	frm.set_query("customer", "items", function () {
+		return { filters: [FORECAST_CUSTOMER_GROUP_FILTER] };
+	});
+
 	if (!frm.doc.sales_person) return;
 
 	// Fetch Sales Person's allowed items and customers
@@ -691,12 +701,14 @@ function setup_item_customer_filters(frm) {
 				console.log('Allowed Items:', allowed_items);
 				console.log('Allowed Customers:', allowed_customers);
 
-				// Set filter for customer in child table
+				// Set filter for customer in child table: Sales-Person-wise allowed list
+				// AND only Channel Partner / Primary customer groups.
 				frm.set_query('customer', 'items', function() {
 					if (allowed_customers.length > 0) {
 						return {
 							filters: [
-								['Customer', 'name', 'in', allowed_customers]
+								['Customer', 'name', 'in', allowed_customers],
+								FORECAST_CUSTOMER_GROUP_FILTER
 							]
 						};
 					} else {
