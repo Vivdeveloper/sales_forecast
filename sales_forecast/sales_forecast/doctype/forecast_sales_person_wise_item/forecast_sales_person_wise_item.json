@@ -122,8 +122,7 @@
    "fieldname": "miscellaneous_customer",
    "fieldtype": "Check",
    "in_list_view": 1,
-   "label": "Misc Customer",
-   "read_only_depends_on": "eval:doc.customer"
+   "label": "Misc Customer"
   },
   {
    "fieldname": "customer",

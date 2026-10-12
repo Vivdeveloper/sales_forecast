@@ -159,12 +159,10 @@ frappe.ui.form.on("Forecast Sales Person Wise Item", {
 	},
 
 	// Miscellaneous Customer: on tick, fill Rate/Rate Per Unit from the packed good's Standard
-	// Selling (company) price. Mutually exclusive with Customer: ticking it clears + disables Customer.
+	// Selling (company) price. Ticking it FREEZES the Customer column but KEEPS its value — the
+	// customer is retained for reference; pricing still uses the Standard Selling (company) rate
+	// because fetch_customer_rate prioritises the Miscellaneous flag over the customer.
 	miscellaneous_customer(frm, cdt, cdn) {
-		const row = locals[cdt][cdn];
-		if (row.miscellaneous_customer && row.customer) {
-			frappe.model.set_value(cdt, cdn, "customer", "");
-		}
 		enforce_customer_exclusivity(frm);
 		fetch_customer_rate(frm, cdt, cdn);
 	},
