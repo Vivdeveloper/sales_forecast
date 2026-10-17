@@ -24,6 +24,9 @@ frappe.ui.form.on("Forecast Club", {
 	refresh(frm) {
 		render_club_week_totals(frm);
 		add_forecast_status_button(frm);
+		// Keep Forecast Quantity consistent with the Forecast Type on load (Special mirrors
+		// Planned Quantity; Normal keeps weekly demand).
+		apply_forecast_type_quantity(frm);
 		// Live-refresh W1..W4 WO when a linked Work Order is submitted/cancelled elsewhere
 		// (the server updates the field + publishes this event). Bound once per form.
 		if (!frm._wo_live_bound) {
@@ -257,8 +260,32 @@ frappe.ui.form.on("Forecast Club", {
 		// items already committed in another Normal club for the same plant/month;
 		// Special is allowed to repeat). Re-fetch so the Items table reflects the toggle.
 		fetch_sales_forecasts_if_dates_set(frm);
+		// Special -> each item's Forecast Quantity mirrors its Planned Quantity; Normal keeps
+		// the weekly-demand total. Apply live now, and again after any re-fetch settles.
+		apply_forecast_type_quantity(frm);
+		setTimeout(() => apply_forecast_type_quantity(frm), 1500);
 	}
 });
+
+// Forecast Quantity semantics depend on Forecast Type:
+//   * Special -> Forecast Quantity = Planned Quantity (the planned production total)
+//   * Normal  -> Forecast Quantity = Week 1 + Week 2 + Week 3 + Week 4 (weekly demand)
+// Runs live on toggle (no save). The server before_save enforces the same on save.
+function apply_forecast_type_quantity(frm) {
+	if (frm.doc.docstatus === 1) {
+		return;
+	}
+	const special = frm.doc.forecast_type === "Special";
+	(frm.doc.items || []).forEach((row) => {
+		const normal_fq =
+			flt(row.week_1) + flt(row.week_2) + flt(row.week_3) + flt(row.week_4);
+		const target = special ? flt(row.planned_quantity) : normal_fq;
+		if (flt(row.forecast_quantity) !== target) {
+			frappe.model.set_value(row.doctype, row.name, "forecast_quantity", target);
+		}
+	});
+	frm.refresh_field("items");
+}
 
 // Every frm.call({doc: frm.doc}) posts the whole client doc and its response re-syncs
 // the whole doc back (frappe.model.sync on response.docs). Two of them in flight at once
@@ -680,8 +707,11 @@ function refresh_all_rows_stock(frm) {
 	frm.doc.items.forEach(function(row) {
 		if (!row.item_code) return;
 		// Derived from values already on the row, so no server round-trip needed.
-		row.forecast_quantity = flt(row.week_1) + flt(row.week_2) + flt(row.week_3) + flt(row.week_4);
 		row.planned_quantity = flt(row.w1_batch_qty) + flt(row.w2_batch_qty) + flt(row.w3_batch_qty) + flt(row.w4_batch_qty);
+		// Special -> Forecast Quantity mirrors Planned Quantity; Normal -> weekly demand total.
+		row.forecast_quantity = frm.doc.forecast_type === 'Special'
+			? flt(row.planned_quantity)
+			: flt(row.week_1) + flt(row.week_2) + flt(row.week_3) + flt(row.week_4);
 		frappe.call({
 			method: 'sales_forecast.sales_forecast.doctype.forecast_club.forecast_club.get_item_stock_and_packaging',
 			args: { item_code: row.item_code, company: frm.doc.company },
@@ -841,10 +871,13 @@ function calculate_totals(frm, cdt, cdn) {
 	frappe.model.set_value(cdt, cdn, 'total_batch_qty', total_batches);
 	frappe.model.set_value(cdt, cdn, 'total_qty', total_qty);
 
-	// Forecast Quantity = total weekly demand; Planned Quantity = total planned production.
-	frappe.model.set_value(cdt, cdn, 'forecast_quantity',
-		flt(row.week_1) + flt(row.week_2) + flt(row.week_3) + flt(row.week_4));
+	// Planned Quantity = total planned production. Forecast Quantity = weekly demand for
+	// Normal, but mirrors Planned Quantity when the Forecast Type is Special.
 	frappe.model.set_value(cdt, cdn, 'planned_quantity', total_qty);
+	frappe.model.set_value(cdt, cdn, 'forecast_quantity',
+		frm.doc.forecast_type === 'Special'
+			? total_qty
+			: flt(row.week_1) + flt(row.week_2) + flt(row.week_3) + flt(row.week_4));
 
 	frm.refresh_field('items');
 	render_club_week_totals(frm);

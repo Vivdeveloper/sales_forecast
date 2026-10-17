@@ -261,15 +261,20 @@ class ForecastClub(Document):
 				for n in (1, 2, 3, 4)
 			)
 
-			# Forecast Quantity: total sales-forecast demand (sum of weekly forecast qtys)
-			if hasattr(item, "forecast_quantity"):
-				item.forecast_quantity = (
-					flt(item.week_1) + flt(item.week_2) + flt(item.week_3) + flt(item.week_4)
-				)
-
 			# Planned Quantity: total planned production qty (same as total_qty)
 			if hasattr(item, "planned_quantity"):
 				item.planned_quantity = flt(item.total_qty)
+
+			# Forecast Quantity depends on the Forecast Type:
+			#   * Special -> mirrors Planned Quantity (total planned production)
+			#   * Normal  -> total sales-forecast demand (sum of weekly forecast qtys)
+			if hasattr(item, "forecast_quantity"):
+				if (self.forecast_type or "") == "Special":
+					item.forecast_quantity = flt(item.total_qty)
+				else:
+					item.forecast_quantity = (
+						flt(item.week_1) + flt(item.week_2) + flt(item.week_3) + flt(item.week_4)
+					)
 
 			# Sales UOM: this bench relabels Item.stock_uom as "Sales UOM" (blank if none)
 			if item.item_code and hasattr(item, "sales_uom"):
