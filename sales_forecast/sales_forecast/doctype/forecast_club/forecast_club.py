@@ -145,6 +145,43 @@ class ForecastClub(Document):
 			for r in rows
 		}
 
+	def get_item_club_links(self):
+		"""{item_code: [club_name, ...]} — the other non-cancelled clubs (same Month x Plant)
+		that already contain each item. Used to tell the planner WHICH plan an excluded /
+		already-clubbed item is part of."""
+		if not (self.forecast_start_date and self.forecast_end_date and self.plant):
+			return {}
+
+		start_first = get_first_day(getdate(self.forecast_start_date))
+		end_last = get_last_day(getdate(self.forecast_end_date))
+
+		rows = frappe.db.sql(
+			"""
+			SELECT DISTINCT ci.item_code AS item_code, fc.name AS club
+			FROM `tabForecast Club` fc
+			JOIN `tabForecast Club Item` ci ON ci.parent = fc.name
+			WHERE fc.name != %(self_name)s
+			  AND fc.docstatus != 2
+			  AND IFNULL(fc.workflow_state, '') != 'Cancelled'
+			  AND fc.plant = %(plant)s
+			  AND fc.forecast_start_date <= %(end_last)s
+			  AND fc.forecast_end_date >= %(start_first)s
+			  AND ci.item_code IS NOT NULL AND ci.item_code != ''
+			ORDER BY fc.name
+			""",
+			{
+				"self_name": self.name or "new-forecast-club",
+				"plant": self.plant,
+				"start_first": start_first,
+				"end_last": end_last,
+			},
+			as_dict=True,
+		)
+		out = {}
+		for r in rows:
+			out.setdefault(r.item_code, []).append(r.club)
+		return out
+
 	def validate_no_locked_items(self):
 		"""Block moving this club INTO a valid-flow (locked) state if any of its items are
 		already part of a valid flow in another club (overlapping month, same plant & type).
@@ -864,11 +901,19 @@ class ForecastClub(Document):
 			)
 			return
 
-		# Repeat clubbing is INCREMENTAL: only the NEW demand comes in. For the same
-		# Month x Plant, subtract what other (non-cancelled) clubs already took, per week —
-		# Normal and Special share one pool. A fully-covered item is left out entirely.
+		# Repeat clubbing is INCREMENTAL: only the demand not yet taken by other clubs comes in.
+		# For the same Month x Plant, subtract what other (non-cancelled) clubs already took,
+		# per week — Normal and Special share one pool.
+		#   * FULLY clubbed elsewhere  -> EXCLUDED entirely (it must not re-appear; a draft in
+		#                                 another club counts). The planner is told which club
+		#                                 it is in (get_item_club_links).
+		#   * PARTIALLY clubbed        -> comes with ONLY its remaining weekly qty.
+		#   * NOT in any other club    -> comes (even with 0 qty — e.g. demand already fulfilled
+		#                                 by stock, or zero forecast). The planner decides whether
+		#                                 to plan it or remove it by hand.
 		already_clubbed = self.get_already_clubbed_qty()
-		already_clubbed_items = []  # items whose full demand is already clubbed elsewhere (still added, for info)
+		item_club_links = self.get_item_club_links()
+		excluded_clubbed = []  # [(item_code, [club, ...]), ...] — fully clubbed elsewhere, dropped
 
 		# Add aggregated items to the items child table
 		for item_data in items_dict.values():
@@ -881,26 +926,27 @@ class ForecastClub(Document):
 					continue
 
 			# NOTE: Items whose finished-goods stock already covers the forecast demand are
-			# NO LONGER auto-skipped — the planner decides whether to plan them, so every
-			# forecast item is added regardless of FG coverage. (Auto-skip removed on request.)
+			# NO LONGER auto-skipped — the planner decides whether to plan them, so a non-clubbed
+			# item is added regardless of FG coverage (may come with 0). (Auto-skip removed.)
 			total_demand = (
 				flt(item_data["week_1"]) + flt(item_data["week_2"])
 				+ flt(item_data["week_3"]) + flt(item_data["week_4"])
 			)
 
-			# Incremental: this club's week qty = total forecast this week - already clubbed
-			# by other clubs (never negative). A brand-new item has nothing subtracted.
-			# Only applied to items that actually have demand; zero-demand rows keep the old
-			# behaviour (included with 0s) so this change doesn't drop unrelated items.
 			if total_demand > 0:
 				taken = already_clubbed.get(item_data["item_code"], {})
 				new_weeks = {n: max(0.0, flt(item_data[f"week_{n}"]) - flt(taken.get(n))) for n in (1, 2, 3, 4)}
 				if sum(new_weeks.values()) <= 0:
-					# Whole demand is already clubbed in other plans -> no NEW qty to add. Still
-					# ADD the row (with 0 new weekly qty) so the planner can review and edit it if
-					# they want to plan more; just flag it for the "Already Clubbed" notice.
-					already_clubbed_items.append(item_data["item_code"])
+					# Whole demand is already clubbed in another plan -> nothing LEFT for this
+					# item. EXCLUDE it (don't re-fetch); record the club(s) it belongs to so the
+					# planner can see where it already lives.
+					excluded_clubbed.append(
+						(item_data["item_code"], item_club_links.get(item_data["item_code"], []))
+					)
+					continue
 			else:
+				# Zero forecast demand and NOT taken by another club -> still added with 0 so the
+				# planner can review/remove it; only clubbed items are excluded above.
 				new_weeks = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
 
 			# Get BOM for the item if it exists
@@ -925,10 +971,20 @@ class ForecastClub(Document):
 		plant_note = f" for {self.plant}" if self.plant else ""
 		frappe.msgprint(f"Fetched {len(self.items)} items{plant_note} from {len(forecast_docs)} sales forecasts")
 
-		if already_clubbed_items:
-			msg = "<br>".join(frappe.bold(ic) for ic in already_clubbed_items)
+		if excluded_clubbed:
+			def _club_links(clubs):
+				if not clubs:
+					return _("(another plan)")
+				return ", ".join(
+					'<a href="/app/forecast-club/{0}" target="_blank">{0}</a>'.format(c) for c in clubs
+				)
+
+			msg = "<br>".join(
+				"{0} — {1} {2}".format(frappe.bold(ic), _("in"), _club_links(clubs))
+				for ic, clubs in excluded_clubbed
+			)
 			frappe.msgprint(
-				_("{0} item(s) already have their full forecast demand clubbed in another plan for this month &amp; plant (Normal + Special combined). They have been added with <b>0</b> new quantity — edit them if you want to plan more:<br>{1}").format(len(already_clubbed_items), msg),
+				_("{0} item(s) already have their full forecast demand clubbed in another plan for this month &amp; plant (Normal + Special combined). They have been <b>excluded</b> — only items with remaining un-clubbed demand are fetched. Already clubbed in:<br>{1}").format(len(excluded_clubbed), msg),
 				title=_("Already Clubbed"),
 				indicator="orange",
 			)
